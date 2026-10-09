@@ -1,0 +1,25 @@
+# Odoo with its PostgreSQL and the Newo addons. The policies refuse a plan that would
+# destroy the filestore or the database; list the address under allow_destroy to let it go.
+hostname: {{ yaml .hostname }}
+# The Odoo image with the addons baked in, pinned by a fixed tag or a digest.
+image: {{ yaml .odoo_image }}
+# PostgreSQL. mode "bundled" runs it inside the Odoo job (image applies). mode
+# "external" connects Odoo to a shared PostgreSQL and makes its own role and
+# database there on start, using the superuser credential — use it when several
+# apps share one. Get host/port/admin_secret from: damstack postgres output.
+#   mode: external
+#   host: 10.77.0.1
+#   port: 5432
+#   admin_secret: default/postgres/admin
+postgres:
+  mode: bundled
+  image: postgres:16.10
+# The one database Odoo serves; dbfilter pins Odoo to exactly this name.
+db_name: odoo
+# Odoo HTTP workers; above zero serves websockets on the longpolling port.
+workers: 2
+# Load Odoo demo data when the database is first created.
+demo: false
+# Odoo faces the internet only through Traefik, so it opens no public port of its own.
+public_ports: []
+allow_destroy: []

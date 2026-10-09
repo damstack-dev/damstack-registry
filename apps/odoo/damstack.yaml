@@ -1,0 +1,57 @@
+apiVersion: damstack/v2
+name: odoo
+kind: app
+description: Odoo with its PostgreSQL and the Newo addons, on a Nomad platform such as hashi
+requires:
+  damstack: ">=0.8.0"
+  toolbox: ">=1.1.0, <2.0.0"
+  provides: [nomad, vault-kv, ingress-traefik]
+
+questions:
+  - name: hostname
+    prompt: The name Odoo is served on, such as odoo.example.com
+    pattern: "^[a-z0-9-]+(\\.[a-z0-9-]+)+$"
+  - name: odoo_image
+    prompt: The Odoo image with the addons baked in, pinned by a fixed tag or a digest
+    pattern: "^[a-z0-9][a-z0-9./_-]*(:[a-zA-Z0-9._-]+)?(@sha256:[0-9a-f]{64})?$"
+
+config: template/odoo.yaml.tmpl
+done:
+  - "Odoo is at https://{{ .app.hostname }}, once its certificate comes and DNS has spread."
+  - "The master password of the database manager: damstack odoo output admin_password"
+
+targets:
+  nomad:
+    steps:
+      - name: apply
+        title: Odoo and its database
+        takes: 3 min
+        tofu:
+          dir: infra
+          action: apply
+          policy: &policy {dir: policy}
+          outputs: {dns_records: dns/odoo.json}
+        env: &env
+          TF_VAR_server_address: "{{ .config.server.address }}"
+        tunnel: true
+        confirm: true
+    commands:
+      plan:
+        tofu: {dir: infra, action: plan, policy: *policy}
+        env: *env
+        tunnel: true
+      output:
+        tofu: {dir: infra, action: output}
+        env: *env
+
+check:
+  answers: test/answers.yaml
+  platform: test/platform.yaml
+  steps:
+    - name: outputs
+      run:
+        - sh
+        - -c
+        - >-
+          cd "$DAMSTACK_STACK/infra" && export TF_DATA_DIR="$DAMSTACK_PROJECT/.damstack/work/tofu-test" TF_VAR_project="$DAMSTACK_PROJECT" &&
+          tofu init -backend=false -input=false -lockfile=readonly >/dev/null && tofu test -no-color
