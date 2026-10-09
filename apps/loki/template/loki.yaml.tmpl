@@ -1,0 +1,7 @@
+# A shared Loki log store. The policies refuse a plan that would destroy the
+# logs; list the address under allow_destroy to let it go.
+# How long logs are kept.
+retention_period: 168h
+# A log store is reachable only inside the platform; it opens no public port.
+public_ports: []
+allow_destroy: []
