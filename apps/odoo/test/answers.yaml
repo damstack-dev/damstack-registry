@@ -1,2 +1,2 @@
 hostname: odoo.example.org
-odoo_image: ghcr.io/example/odoo-newo:19.0.1
+odoo_image: ghcr.io/example/odoo:19.0.1

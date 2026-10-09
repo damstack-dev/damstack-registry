@@ -1,7 +1,7 @@
 # damstack-odoo
 
 An [damstack](https://github.com/eugene-panin/damstack) app: Odoo with its own
-PostgreSQL and the Newo addons, on a Nomad platform such as
+PostgreSQL, on a Nomad platform such as
 [hashi](https://github.com/eugene-panin/damstack-hashi). The job is the
 [terraform-nomad-odoo](https://github.com/eugene-panin/terraform-nomad-odoo)
 module; this stack wires it to the platform and keeps the data safe.
@@ -18,7 +18,7 @@ It asks for:
 - **hostname** — the name Odoo is served on, e.g. `odoo.example.com`.
 - **odoo_image** — the Odoo image with the addons baked in, pinned by a fixed
   tag or a digest (built by
-  [docker-odoo-newo](https://github.com/eugene-panin/docker-odoo-newo)).
+  [docker-odoo](https://github.com/eugene-panin/docker-odoo)).
 
 The rest live in `apps.odoo` of the project's `stack.yaml` with defaults, edit
 them with `damstack edit`: `postgres` (`mode: bundled` with its `image`, or
