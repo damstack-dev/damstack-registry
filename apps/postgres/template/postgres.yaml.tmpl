@@ -1,0 +1,10 @@
+# A shared PostgreSQL for apps that set postgres.mode external. It knows nothing
+# about the databases on it — each consumer app creates its own role and database.
+# The policies refuse a plan that would destroy the data; list the address under
+# allow_destroy to let it go.
+image: postgres:16.10
+admin_user: postgres
+port: 5432
+# A shared database is reachable only inside the platform; it opens no public port.
+public_ports: []
+allow_destroy: []
