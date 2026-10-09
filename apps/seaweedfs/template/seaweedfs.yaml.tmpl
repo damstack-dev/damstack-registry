@@ -1,0 +1,15 @@
+# A shared SeaweedFS object lake. The policies refuse a plan that would destroy the
+# lake; list the address under allow_destroy to let it go.
+#
+# bucket is the one bucket all identities are granted on. identities are the S3
+# users: each gets an access key equal to its name and a generated secret key in
+# Vault, with the given actions on the bucket. The default is one writer. For an
+# app, set its own identities (for Sauron: a fetcher with Admin/Read/Write/List/
+# Tagging and readers ingest, incidents, transcriber, ui, tools with Read/List).
+bucket: lake
+identities:
+  - name: app
+    actions: [Admin, Read, Write, List, Tagging]
+# A lake is reachable only inside the platform; it opens no public port.
+public_ports: []
+allow_destroy: []
