@@ -1,0 +1,23 @@
+# A shared NATS (JetStream) bus. The policies refuse a plan that would destroy the
+# JetStream store; list the address under allow_destroy to let it go.
+#
+# users and config go together: config names the users and refers to each
+# password as $NATS_<USER>_PASSWORD. The default below is a single "app" user with
+# the default (unrestricted) permissions — a working generic bus. To lock it down
+# for an app, replace both with that app's own nats.conf and user list (for
+# Sauron: `python -m sauron.services.natsconf` output and its six services).
+users: [app]
+config: |
+  port: 4222
+  http_port: 8222
+  jetstream {
+    store_dir: /data
+  }
+  authorization {
+    users = [
+      {user: app, password: $NATS_APP_PASSWORD}
+    ]
+  }
+# A bus is reachable only inside the platform; it opens no public port.
+public_ports: []
+allow_destroy: []
