@@ -16,14 +16,18 @@ damstack deploy <project>
 It asks for:
 
 - **hostname** — the name Odoo is served on, e.g. `odoo.example.com`.
-- **odoo_image** — the Odoo image with the addons baked in, pinned by a fixed
-  tag or a digest (built by
-  [docker-odoo](https://github.com/eugene-panin/docker-odoo)).
 
 The rest live in `apps.odoo` of the project's `stack.yaml` with defaults, edit
-them with `damstack edit`: `postgres` (`mode: bundled` with its `image`, or
-`mode: external` with `host`/`port` for a shared PostgreSQL), `db_name`,
-`workers`, `demo`.
+them with `damstack edit`: `image` (base Odoo, default `odoo:19.0`), `postgres`
+(`mode: bundled` with its `image`, or `mode: external` with `host`/`port` for a
+shared PostgreSQL), `db_name`, `workers`, `demo`.
+
+## Addons
+
+The image is base Odoo — no addons baked in. Addons are delivered **separately**
+into the `odoo-addons` host volume, mounted at `/mnt/extra-addons`. Install Odoo
+first, then add a module later: put its directory in that volume, restart Odoo,
+and install the module in the Odoo UI. No image rebuild.
 
 After the deploy:
 

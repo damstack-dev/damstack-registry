@@ -11,14 +11,12 @@ questions:
   - name: hostname
     prompt: The name Odoo is served on, such as odoo.example.com
     pattern: "^[a-z0-9-]+(\\.[a-z0-9-]+)+$"
-  - name: odoo_image
-    prompt: The Odoo image with the addons baked in, pinned by a fixed tag or a digest
-    pattern: "^[a-z0-9][a-z0-9./_-]*(:[a-zA-Z0-9._-]+)?(@sha256:[0-9a-f]{64})?$"
 
 config: template/odoo.yaml.tmpl
 done:
   - "Odoo is at https://{{ .app.hostname }}, once its certificate comes and DNS has spread."
   - "The master password of the database manager: damstack odoo output admin_password"
+  - "Addons go into the odoo-addons volume (not the image); add modules later and restart Odoo."
 
 targets:
   nomad:

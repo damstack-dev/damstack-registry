@@ -1,8 +1,9 @@
 # Odoo with its PostgreSQL and whatever addons are baked into its image. The policies refuse a plan that would
 # destroy the filestore or the database; list the address under allow_destroy to let it go.
 hostname: {{ yaml .hostname }}
-# The Odoo image with the addons baked in, pinned by a fixed tag or a digest.
-image: {{ yaml .odoo_image }}
+# Base Odoo image, pinned. Addons are NOT baked in — deliver them into the
+# odoo-addons volume (mounted at /mnt/extra-addons) and restart Odoo.
+image: odoo:19.0
 # PostgreSQL. mode "bundled" runs it inside the Odoo job (image applies). mode
 # "external" connects Odoo to a shared PostgreSQL and makes its own role and
 # database there on start, using the superuser credential — use it when several
