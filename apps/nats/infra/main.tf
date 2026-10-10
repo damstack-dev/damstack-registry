@@ -4,7 +4,7 @@ locals {
 }
 
 module "nats" {
-  source = "git::https://github.com/eugene-panin/terraform-nomad-nats.git?ref=v0.1.2"
+  source = "git::https://github.com/eugene-panin/terraform-nomad-nats.git?ref=v0.1.3"
 
   users  = local.nats.users
   config = local.nats.config
