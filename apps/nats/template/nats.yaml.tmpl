@@ -18,6 +18,13 @@ config: |
       {user: app, password: $NATS_APP_PASSWORD}
     ]
   }
+# The Consul service mesh: enabled puts it behind an Envoy sidecar; mesh apps reach it
+# as nats.virtual.consul, and only the services in allow may (intentions). Keep 4222 in
+# keep_open_ports while some of its clients are not in the mesh yet.
+#   mesh:
+#     enabled: true
+#     allow: [app]
+#     keep_open_ports: [4222]
 # A bus is reachable only inside the platform; it opens no public port.
 public_ports: []
 allow_destroy: []
