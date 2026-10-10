@@ -1,1 +1,3 @@
+provider "consul" {}
+
 provider "nomad" {}

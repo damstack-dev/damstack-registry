@@ -2,6 +2,12 @@
 # logs; list the address under allow_destroy to let it go.
 # How long logs are kept.
 retention_period: 168h
+# The Consul service mesh: enabled puts Loki behind an Envoy sidecar; mesh apps (Grafana)
+# reach it as loki.virtual.consul, as allow lets them (intentions). Its HTTP port stays
+# open for the platform's Alloy, which pushes from the host.
+#   mesh:
+#     enabled: true
+#     allow: [grafana]
 # A log store is reachable only inside the platform; it opens no public port.
 public_ports: []
 allow_destroy: []
