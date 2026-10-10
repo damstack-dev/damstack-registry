@@ -4,7 +4,7 @@ locals {
 }
 
 module "mimir" {
-  source = "git::https://github.com/eugene-panin/terraform-nomad-mimir.git?ref=v0.1.0"
+  source = "git::https://github.com/eugene-panin/terraform-nomad-mimir.git?ref=v0.1.1"
 
   retention_period = try(local.mimir.retention_period, "0s")
 }
