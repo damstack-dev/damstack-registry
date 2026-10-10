@@ -1,3 +1,4 @@
+mock_provider "consul" {}
 mock_provider "nomad" {}
 
 variables {
