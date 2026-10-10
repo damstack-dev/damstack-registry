@@ -7,9 +7,11 @@ image: odoo:19.0
 # PostgreSQL. mode "bundled" runs it inside the Odoo job (image applies). mode
 # "external" connects Odoo to a shared PostgreSQL and makes its own role and
 # database there on start, using the superuser credential — use it when several
-# apps share one. Get host/port/admin_secret from: damstack postgres output.
+# apps share one. Get host/port/admin_secret from: damstack postgres output. The
+# host is best its Consul name: the job resolves through the platform's Consul DNS,
+# so it finds the database wherever it runs.
 #   mode: external
-#   host: 10.77.0.1
+#   host: postgres.service.consul
 #   port: 5432
 #   admin_secret: default/postgres/admin
 postgres:
