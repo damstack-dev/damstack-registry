@@ -17,6 +17,11 @@ image: odoo:19.0
 postgres:
   mode: bundled
   image: postgres:16.10
+# The Consul service mesh: enabled puts Odoo behind an Envoy sidecar, reaching mesh
+# services over mTLS as their intentions allow (then postgres.host is
+# postgres.virtual.consul, and the postgres app allows odoo).
+#   mesh:
+#     enabled: true
 # The one database Odoo serves; dbfilter pins Odoo to exactly this name.
 db_name: odoo
 # Odoo HTTP workers; above zero serves websockets on the longpolling port.
