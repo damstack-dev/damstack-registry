@@ -10,6 +10,13 @@ bucket: lake
 identities:
   - name: app
     actions: [Admin, Read, Write, List, Tagging]
+# The Consul service mesh: enabled puts the S3 gateway behind an Envoy sidecar; mesh apps
+# reach it as seaweedfs.virtual.consul, and only the services in allow may (intentions).
+# Keep 8333 in keep_open_ports while some of its clients are not in the mesh yet.
+#   mesh:
+#     enabled: true
+#     allow: [app]
+#     keep_open_ports: [8333]
 # A lake is reachable only inside the platform; it opens no public port.
 public_ports: []
 allow_destroy: []
