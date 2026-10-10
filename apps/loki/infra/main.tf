@@ -4,7 +4,7 @@ locals {
 }
 
 module "loki" {
-  source = "git::https://github.com/eugene-panin/terraform-nomad-loki.git?ref=v0.1.1"
+  source = "git::https://github.com/eugene-panin/terraform-nomad-loki.git?ref=v0.1.2"
 
   retention_period = try(local.loki.retention_period, "168h")
 }
