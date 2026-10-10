@@ -4,7 +4,7 @@ locals {
 }
 
 module "odoo" {
-  source = "git::https://github.com/eugene-panin/terraform-nomad-odoo.git?ref=v0.2.9"
+  source = "git::https://github.com/eugene-panin/terraform-nomad-odoo.git?ref=v0.2.10"
 
   hostname   = local.odoo.hostname
   odoo_image = try(local.odoo.image, "odoo:19.0")
