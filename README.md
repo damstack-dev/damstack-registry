@@ -12,6 +12,10 @@ apps/<name>/        an app that runs on a platform, such as mail
 A release of a stack is a tag `<name>/vX.Y.Z` on main, such as `hashi/v0.23.0`
 or `mail/v0.4.1`; damstack takes the latest one of the stack a project uses.
 
+`index.yaml` lists the stacks for damstack. `scripts/index` writes it from
+their `damstack.yaml`, and CI fails when it is not up to date: run it after
+adding a stack or changing its description.
+
 [The manifest reference](https://github.com/eugene-panin/damstack/blob/main/docs/manifest.md)
 says what every field of `damstack.yaml` does.
 
