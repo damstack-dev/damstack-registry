@@ -1,0 +1,3 @@
+# What check-private lets through, one per line, with why.
+1.1.1.1    # Cloudflare's public resolver
+8.8.8.8    # Google's public resolver

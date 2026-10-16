@@ -1,0 +1,102 @@
+#!/usr/bin/env python3
+"""Refuses files that hold what belongs to a person or a project, not to a stack.
+
+check-private               every file git tracks
+check-private --staged      the files staged for the next commit, as they are staged
+check-private FILE...       those files
+"""
+
+import ipaddress
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True).stdout.strip())
+
+FORBIDDEN_PATHS = [
+    (re.compile(r"(^|/)vault\.yml$"), "the secrets of a project"),
+    (re.compile(r"(^|/)vault-pass$"), "the vault password of a project"),
+    (re.compile(r"\.tfstate(\.backup)?$"), "an OpenTofu state"),
+    (re.compile(r"(^|/)known_hosts$"), "the servers a machine knows"),
+    (re.compile(r"(^|/)\.damstack/"), "the record of a project"),
+    (re.compile(r"(^|/)id_(rsa|ecdsa|ed25519)$"), "an SSH private key"),
+    (re.compile(r"(^|/)\.env$"), "an environment file"),
+]
+
+CONTENT = [
+    (re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"), "a private key"),
+    (re.compile(r"^\$ANSIBLE_VAULT;"), "a file encrypted with a project's vault password"),
+]
+
+EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@([A-Za-z0-9-]+\.)+[A-Za-z]{2,}")
+ALLOWED_MAIL_DOMAINS = re.compile(
+    r"(^|\.)(example\.(com|net|org)|example|test|invalid|localhost|users\.noreply\.github\.com)$", re.I
+)
+IPV4 = re.compile(r"(?<![\w.])(\d{1,3}(?:\.\d{1,3}){3})(?![\w.])")
+
+
+def allowed() -> set[str]:
+    path = ROOT / ".privacy-allow"
+    if not path.exists():
+        return set()
+    lines = (line.split("#", 1)[0].strip() for line in path.read_text().splitlines())
+    return {line for line in lines if line}
+
+
+def files(args: list[str]) -> list[tuple[str, bytes]]:
+    if args == ["--staged"]:
+        names = subprocess.run(
+            ["git", "diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z"],
+            capture_output=True, check=True, cwd=ROOT,
+        ).stdout.decode().split("\0")
+        return [(n, subprocess.run(["git", "show", f":{n}"], capture_output=True, check=True, cwd=ROOT).stdout) for n in names if n]
+    if args:
+        return [(a, Path(a).read_bytes()) for a in args]
+    names = subprocess.run(["git", "ls-files", "-z"], capture_output=True, check=True, cwd=ROOT).stdout.decode().split("\0")
+    return [(n, (ROOT / n).read_bytes()) for n in names if n and (ROOT / n).is_file()]
+
+
+def problems(name: str, data: bytes, allow: set[str]) -> list[str]:
+    found = [f"{name}: {why}" for pattern, why in FORBIDDEN_PATHS if pattern.search(name)]
+    if b"\0" in data[:8000]:
+        return found
+    text = data.decode("utf-8", errors="replace")
+    for number, line in enumerate(text.splitlines(), 1):
+        for pattern, why in CONTENT:
+            if pattern.search(line):
+                found.append(f"{name}:{number}: {why}")
+        for match in EMAIL.finditer(line):
+            address = match.group(0)
+            domain = address.rsplit("@", 1)[1]
+            if address not in allow and not ALLOWED_MAIL_DOMAINS.search(domain):
+                found.append(f"{name}:{number}: the e-mail address {address}")
+        for match in IPV4.finditer(line):
+            text_ip = match.group(1)
+            try:
+                ip = ipaddress.IPv4Address(text_ip)
+            except ipaddress.AddressValueError:
+                continue
+            if ip.is_global and text_ip not in allow:
+                found.append(f"{name}:{number}: the public address {text_ip}")
+    return found
+
+
+def main() -> int:
+    allow = allowed()
+    found = [p for name, data in files(sys.argv[1:]) for p in problems(name, data, allow)]
+    if not found:
+        return 0
+    print("These look like what belongs to a person or a project, not to a stack:", file=sys.stderr)
+    for p in found:
+        print(f"  {p}", file=sys.stderr)
+    print(
+        "\nUse example.org, .test or 192.0.2.0/24 in their place. One that must stay, such as a public resolver,\n"
+        "goes in .privacy-allow, one per line, with why.",
+        file=sys.stderr,
+    )
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
