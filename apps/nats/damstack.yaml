@@ -3,9 +3,11 @@ name: nats
 kind: app
 description: A shared NATS (JetStream) bus other apps publish and subscribe on
 requires:
-  damstack: ">=0.8.0"
+  damstack: ">=0.20.0"
   toolbox: ">=1.1.0, <2.0.0"
   provides: [nomad, vault-kv]
+
+provides: [nats@2]
 
 config: template/nats.yaml.tmpl
 done:

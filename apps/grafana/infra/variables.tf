@@ -13,3 +13,9 @@ variable "vault_kv_path" {
   description = "Path of the Vault KV engine the admin credential is kept in; the platform gives it."
   type        = string
 }
+
+variable "damstack_providers" {
+  description = "The providers damstack connected Grafana to, as JSON by capability: {\"metrics@1\": [{name, address, port, meta}]}. damstack sets it; without one, Mimir and Loki by mimir_host and loki_host."
+  type        = string
+  default     = "{}"
+}

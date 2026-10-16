@@ -3,9 +3,11 @@ name: grafana
 kind: app
 description: Grafana for the platform, with Mimir and Loki wired as data sources
 requires:
-  damstack: ">=0.8.0"
+  damstack: ">=0.20.0"
   toolbox: ">=1.1.0, <2.0.0"
   provides: [nomad, vault-kv, ingress-traefik]
+
+uses: [metrics@1, logs@1]
 
 config: template/grafana.yaml.tmpl
 done:

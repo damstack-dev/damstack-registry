@@ -28,6 +28,8 @@ and `keys_secret` (the Vault name of the secret keys). A client connects to
 `host:s3_port`, access key = its identity name, secret key from that Vault
 secret.
 
+It provides `s3@1`.
+
 ## Development
 
 ```sh

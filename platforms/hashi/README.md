@@ -15,8 +15,8 @@ Nomad and the backups; `apply` plans the resources on the platform, checks the
 plan against the policies, and applies it when you say yes; after the apps,
 `dns` publishes the DNS records of the platform and of every app.
 
-`damstack app add mail` adds an app. The platform `provides` nomad, vault-kv,
-consul and ingress-traefik, and gives every app `NOMAD_*`, `CONSUL_*` and
+`damstack app add mail` adds an app. The platform `provides` `nomad@1`, `vault-kv@1`,
+`consul@1`, `ingress-traefik@1` and `observability@1`, and gives every app `NOMAD_*`, `CONSUL_*` and
 `VAULT_*` to reach them; an app opens its ports on the server with
 `public_ports` in its block of `stack.yaml`.
 

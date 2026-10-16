@@ -28,6 +28,9 @@ After the deploy:
 - The connection a consumer needs: `damstack postgres output` prints `host`,
   `port` and `admin_secret` (the Vault name of the superuser credential).
 
+It provides `postgres@16`: odoo with `postgres.mode: external` requires it, so
+`damstack app add odoo` brings it when the project has none.
+
 ## Wiring a consumer
 
 Deploy this first, then point a consumer at it. For `odoo`:

@@ -3,9 +3,11 @@ name: loki
 kind: app
 description: A shared Loki log store other apps and the platform's collector push to
 requires:
-  damstack: ">=0.8.0"
+  damstack: ">=0.20.0"
   toolbox: ">=1.1.0, <2.0.0"
   provides: [nomad]
+
+provides: [logs@1]
 
 config: template/loki.yaml.tmpl
 done:

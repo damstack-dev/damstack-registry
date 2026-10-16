@@ -28,6 +28,8 @@ After the deploy, `damstack nats output` prints `host`, `client_port` and
 `credentials_secret` (the Vault name of the passwords). A client connects to
 `host:client_port` and reads its own password from that Vault secret.
 
+It provides `nats@2`.
+
 ## Development
 
 ```sh

@@ -3,9 +3,11 @@ name: mimir
 kind: app
 description: A shared Mimir metric store the platform collector remote_writes to
 requires:
-  damstack: ">=0.8.0"
+  damstack: ">=0.20.0"
   toolbox: ">=1.1.0, <2.0.0"
   provides: [nomad]
+
+provides: [metrics@1]
 
 config: template/mimir.yaml.tmpl
 done:

@@ -26,19 +26,40 @@ def manifests(kind: str) -> list[tuple[str, dict]]:
     return out
 
 
+def capability(s: str) -> str:
+    return s if "@" in s else s + "@1"
+
+
+def capabilities(m: dict) -> dict:
+    out = {}
+    for key, value in (
+        ("provides", m.get("provides")),
+        ("requires", (m.get("requires") or {}).get("capabilities")),
+        ("uses", m.get("uses")),
+    ):
+        if value:
+            out[key] = value
+    if m.get("recommended"):
+        out["recommended"] = True
+    return out
+
+
 def index() -> str:
     platforms = manifests("platforms")
     apps = manifests("apps")
     stacks = []
     for path, m in platforms:
-        stacks.append({"name": m["name"], "url": URL, "path": path, "description": m.get("description", "")})
+        entry = {"name": m["name"], "url": URL, "path": path, "description": m.get("description", "")}
+        entry.update(capabilities(m))
+        stacks.append(entry)
     for path, m in apps:
-        needs = set(m.get("requires", {}).get("provides", []))
-        hosts = [p["name"] for _, p in platforms if needs <= set(p.get("provides", []))]
+        needs = {capability(c) for c in m.get("requires", {}).get("provides", [])}
+        hosts = [p["name"] for _, p in platforms if needs <= {capability(c) for c in p.get("provides", [])}]
         entry = {"name": m["name"], "kind": "app"}
         if len(hosts) == 1:
             entry["platform"] = hosts[0]
         entry.update({"url": URL, "path": path, "description": m.get("description", "")})
+        entry.update(capabilities(m))
         stacks.append(entry)
     for path, m in platforms + apps:
         if m["name"] != Path(path).name:
