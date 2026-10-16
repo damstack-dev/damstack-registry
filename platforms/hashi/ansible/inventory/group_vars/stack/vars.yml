@@ -1,0 +1,186 @@
+---
+stack_project: "{{ lookup('ansible.builtin.env', 'DAMSTACK_PROJECT') }}"
+stack: "{{ lookup('ansible.builtin.file', stack_project ~ '/stack.yaml') | from_yaml }}"
+stack_restore: "{{ lookup('ansible.builtin.env', 'DAMSTACK_RESTORE') }}"
+stack_restore_dir: /var/lib/damstack/restore
+stack_restore_hooks: "{{ stack_restore_dir }}/var/backups/restic-hooks"
+_stack_prefix: "{{ (stack.network.cidr | split('/') | first).rsplit('.', 1) | first }}"
+_stack_ports:
+  80: HTTP
+  443: HTTPS
+  25: SMTP
+  465: SMTP submission, implicit TLS
+  587: SMTP submission, STARTTLS
+  993: IMAP, implicit TLS
+
+ansible_user: "{{ stack.server.ops_user }}"
+stack_ops_user: "{{ stack.server.ops_user }}"
+stack_bootstrap_user: "{{ stack.server.bootstrap_user | default('root') }}"
+ansible_become: true
+
+ansible_host: "{{ stack.server.address }}"
+stack_node_name: "{{ stack.server.node_name | default(inventory_hostname) }}"
+consul_node_name: "{{ stack_node_name }}"
+nomad_node_name: "{{ stack_node_name }}"
+vault_node_id: "{{ stack_node_name }}"
+
+wireguard_interface: wg0
+wireguard_address: "{{ _stack_prefix }}.1/{{ stack.network.cidr | split('/') | last }}"
+wireguard_listen_port: 51820
+wireguard_manage_firewall: true
+wireguard_allow_mesh_traffic: true
+
+# The keys of the server and of the devices are made by damstack on the laptop and
+# kept in vault.yml; the server gets the public keys and preshared keys only.
+wireguard_private_key: "{{ vault_wireguard.server.private_key }}"
+wireguard_client_dir: /etc/wireguard/clients
+wireguard_client_list: >-
+  {%- set clients = [] -%}
+  {%- for name in stack.network.clients -%}
+  {%- set d = vault_wireguard.devices[name] -%}
+  {%- set _ = clients.append({'name': name, 'address': d.address ~ '/32',
+        'public_key': d.public_key, 'preshared_key': d.preshared_key}) -%}
+  {%- endfor -%}
+  {{ clients }}
+
+stack_public_interface: >-
+  {{ ansible_facts.default_ipv4.interface if stack.server.public_interface | default('auto') == 'auto'
+     else stack.server.public_interface }}
+
+firewall_allow: >-
+  {%- set rules = [] -%}
+  {%- set ports = [] -%}
+  {%- for port in stack.server.public_ports -%}{%- set _ = ports.append(port) -%}{%- endfor -%}
+  {%- for app in (stack.apps | default({}, true)).values() -%}
+  {%- for port in (app.public_ports | default([])) -%}{%- set _ = ports.append(port) -%}{%- endfor -%}
+  {%- endfor -%}
+  {%- for port in ports | unique -%}
+  {%- set _ = rules.append({'port': port, 'interface': stack_public_interface, 'comment': _stack_ports[port] | default('Public port ' ~ port)}) -%}
+  {%- endfor -%}
+  {%- set _ = rules.append({'interface': 'nomad', 'comment': 'Nomad bridge, jobs reaching Consul, Vault and Nomad on the host'}) -%}
+  {{ rules }}
+
+stack_address: "{{ wireguard_address | split('/') | first }}"
+stack_ca_cert: "{{ lookup('ansible.builtin.file', stack_project ~ '/ca.pem') }}"
+stack_ca_key: "{{ vault_stack_ca_key }}"
+
+consul_version: 2.0.4
+consul_server: true
+consul_bootstrap_expect: 1
+consul_datacenter: "{{ stack.name }}"
+consul_bind_address: "{{ stack_address }}"
+consul_gossip_keys: >-
+  {{ [vault_consul_gossip_key]
+     + ([vault_consul_gossip_key_previous] if vault_consul_gossip_key_previous | default('') | length > 0 else []) }}
+consul_acl_bootstrap_token: "{{ vault_consul_acl_bootstrap_token }}"
+consul_acl_dns_token: "{{ vault_consul_acl_dns_token }}"
+consul_acl_agent_token: "{{ vault_consul_acl_agent_token }}"
+
+consul_dns_domains:
+  - consul
+consul_dns_listen_addresses:
+  - "{{ stack_address }}"
+consul_pki_ca_cert: "{{ stack_ca_cert }}"
+consul_pki_ca_key: "{{ stack_ca_key }}"
+# The service mesh: Connect on, gRPC over TLS (8503) for the Envoy sidecars, and
+# the UI's topology metrics read from Mimir (Envoy's metrics, scraped by Alloy).
+consul_extra_config:
+  connect:
+    enabled: true
+  ports:
+    grpc_tls: 8503
+  ui_config:
+    metrics_provider: prometheus
+    metrics_proxy:
+      base_url: "http://{{ stack_address }}:9009/prometheus"
+      # The allowlist is matched against the whole target path, which carries
+      # Mimir's /prometheus prefix (the default allows only /api/v1/query*).
+      path_allowlist:
+        - /prometheus/api/v1/query
+        - /prometheus/api/v1/query_range
+
+vault_version: 2.1.1
+vault_bind_address: "{{ stack_address }}"
+vault_pki_ca_cert: "{{ stack_ca_cert }}"
+vault_pki_ca_key: "{{ stack_ca_key }}"
+vault_auto_unseal: "{{ stack.vault.auto_unseal | default(true) | bool }}"
+vault_init_output_path: "{{ stack_project }}/.damstack/work/vault-init.json"
+vault_restore_snapshot: "{{ (stack_restore_hooks ~ '/vault.snap') if stack_restore | length > 0 else '' }}"
+# Vault registers itself in Consul as the service vault, tagged active on the
+# leader, so apps reach it as active.vault.service.consul (a name its certificate
+# carries) wherever it runs. Consul's certificate is signed by the project CA,
+# which the Vault role already keeps readable by Vault.
+vault_extra_config:
+  service_registration:
+    consul:
+      address: 127.0.0.1:8501
+      scheme: https
+      tls_ca_file: /etc/vault.d/tls/ca.pem
+      token: "{{ vault_vault_consul_token }}"
+stack_vault_token: >-
+  {{ vault_root_token if vault_root_token is defined
+     else (lookup('ansible.builtin.file', vault_init_output_path) | from_json).root_token }}
+
+nomad_version: 2.0.7
+nomad_region: global
+nomad_datacenter: "{{ stack.name }}"
+nomad_bind_address: "{{ stack_address }}"
+nomad_pki_ca_cert: "{{ stack_ca_cert }}"
+nomad_pki_ca_key: "{{ stack_ca_key }}"
+nomad_acl_bootstrap_token: "{{ vault_nomad_acl_bootstrap_token }}"
+nomad_gossip_keys:
+  - "{{ vault_nomad_gossip_key }}"
+nomad_cni: true
+nomad_network_interface: "{{ wireguard_interface }}"
+nomad_host_networks:
+  - public:
+      interface: "{{ stack_public_interface }}"
+nomad_consul_address: 127.0.0.1:8501
+nomad_consul_ca_cert: "{{ stack_ca_cert }}"
+nomad_consul_token: "{{ vault_nomad_consul_token }}"
+nomad_vault_address: "https://{{ stack_address }}:8200"
+nomad_vault_ca_cert: "{{ stack_ca_cert }}"
+
+# Optional container registry login for the Nomad docker driver, so jobs can pull
+# private images. Set under stack.registry (server, username); the password is the
+# secret vault_registry_password. An empty or absent server means no registry login,
+# and nomad_extra_config stays {} — the agent config is unchanged.
+nomad_config_dir: /etc/nomad.d
+# consul-cni, the transparent proxy's CNI plugin: the release that goes with Consul.
+stack_consul_cni_version: 2.0.4
+_stack_arch: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}[ansible_facts['architecture']] | default(ansible_facts['architecture']) }}"
+nomad_docker_auth_file: "{{ nomad_config_dir }}/docker-auth.json"
+#
+# The Nomad agent reaches Consul's gRPC (TLS) for the service mesh: Envoy sidecars
+# get their configuration through it.
+nomad_extra_config: >-
+  {{ {'consul': {'grpc_address': '127.0.0.1:8503'}}
+     | combine({'plugin': [{'docker': [{'config': [{'auth': [{'config': nomad_docker_auth_file}]}]}]}]}
+               if ((stack.registry | default({})).server | default('')) | length > 0 else {}) }}
+
+backup_repository: "{{ stack.backup.server.path }}"
+backup_password: "{{ vault_backup_password }}"
+backup_compression: "{{ stack.backup.compression | default('auto') }}"
+backup_schedule: "*-*-* {{ stack.backup.schedule }}:00"
+backup_keep: "{{ stack.backup.server.keep }}"
+backup_paths:
+  - /var/backups/volumes
+backup_hooks:
+  - name: consul
+    command: consul snapshot save "$BACKUP_HOOK_OUTPUT/consul.snap"
+  - name: nomad
+    command: nomad operator snapshot save "$BACKUP_HOOK_OUTPUT/nomad.snap"
+  - name: vault
+    command: vault token renew >/dev/null && vault operator raft snapshot save "$BACKUP_HOOK_OUTPUT/vault.snap"
+  - name: volumes
+    command: /usr/local/sbin/damstack-backup-volumes /var/backups/volumes
+backup_hook_environment:
+  CONSUL_HTTP_ADDR: https://127.0.0.1:8501
+  CONSUL_CACERT: /etc/consul.d/tls/ca.pem
+  CONSUL_HTTP_TOKEN: "{{ vault_consul_acl_bootstrap_token }}"
+  NOMAD_ADDR: "https://{{ stack_address }}:4646"
+  NOMAD_CACERT: /etc/nomad.d/tls/ca.pem
+  NOMAD_TOKEN: "{{ vault_nomad_acl_bootstrap_token }}"
+  VAULT_ADDR: "https://{{ stack_address }}:8200"
+  VAULT_CACERT: /etc/vault.d/tls/ca.pem
+  VAULT_TOKEN: "{{ vault_backup_vault_token }}"

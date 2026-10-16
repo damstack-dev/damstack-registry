@@ -1,0 +1,82 @@
+---
+- name: Check that every variable the roles read resolves from the project
+  hosts: stack
+  gather_facts: true
+  connection: local
+  vars:
+    ansible_become: false
+  tasks:
+    - name: Assert the generated secrets and the stack settings
+      ansible.builtin.assert:
+        that:
+          - ansible_host == stack.server.address
+          - stack_address == wireguard_address.split('/')[0]
+          - consul_datacenter == stack.name
+          - consul_gossip_keys | length == 1
+          - consul_gossip_keys[0] is match('^[A-Za-z0-9+/]{43}=$')
+          - nomad_gossip_keys[0] is match('^[A-Za-z0-9+/]{43}=$')
+          - consul_acl_bootstrap_token | length == 36
+          - consul_acl_agent_token | length == 36
+          - nomad_consul_token | length == 36
+          - "'BEGIN PRIVATE KEY' in consul_pki_ca_key"
+          - "'BEGIN CERTIFICATE' in consul_pki_ca_cert"
+          - consul_pki_ca_cert == nomad_pki_ca_cert
+          - stack.server.public_interface == 'auto'
+          - nomad_host_networks[0].public.interface == ansible_facts.default_ipv4.interface
+          - stack.network.cidr is match('^10\\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\\.[0-9]+\\.0/24$')
+          - stack.network.cidr != '10.77.0.0/24'
+          - wireguard_client_list | map(attribute='name') | list == stack.network.clients
+          - wireguard_client_list | map(attribute='public_key') | select('match', '^[A-Za-z0-9+/]{43}=$') | list | length == 2
+          - wireguard_client_list | map(attribute='preshared_key') | select('match', '^[A-Za-z0-9+/]{43}=$') | list | length == 2
+          - wireguard_client_list | map(attribute='address') | list == [_stack_prefix ~ '.2/32', _stack_prefix ~ '.3/32']
+          - wireguard_private_key is match('^[A-Za-z0-9+/]{43}=$')
+          - vault_ssh_project_key.public_key is match('^ssh-ed25519 [A-Za-z0-9+/]+=* damstack-project-key$')
+          - firewall_allow | selectattr('interface', 'equalto', 'nomad') | list | length == 1
+          - firewall_allow | map(attribute='port') | select('defined') | list == stack.server.public_ports
+          - backup_password | length > 20
+          - backup_hook_environment.VAULT_TOKEN | length == 36
+          - stack_ops_user == 'ops'
+          - stack_bootstrap_user == stack.server.bootstrap_user
+          - consul_node_name == 'server' and nomad_node_name == 'server' and vault_node_id == 'server'
+          - vault_auto_unseal
+        quiet: true
+
+    - name: Assert stack.yaml says what test/answers.yaml answered
+      ansible.builtin.assert:
+        that:
+          - stack.server.address == '192.0.2.10'
+          - stack.network.clients == ['laptop', 'phone']
+          - stack.dns.zones == ['infra.example.org', 'example.org']
+          - stack.infra_domain == 'infra.example.org'
+          - stack.acme_email == 'admin@example.org'
+          - stack.server.public_ports == [80, 443]
+          - stack.apps == {}
+        quiet: true
+
+    - name: Assert the firewall opens the ports of the apps with those of the platform, once each
+      ansible.builtin.assert:
+        that:
+          - firewall_allow | map(attribute='port') | select('defined') | list == [80, 443, 25, 993]
+          - firewall_allow | selectattr('port', 'defined') | map(attribute='interface') | unique | list == ['eth0']
+        quiet: true
+      vars:
+        stack:
+          name: check
+          server: {address: 192.0.2.10, bootstrap_user: root, ops_user: ops, public_interface: eth0, public_ports: [80, 443]}
+          network: {cidr: 10.77.0.0/24, clients: [laptop]}
+          apps:
+            mail: {public_ports: [25, 443, 993]}
+            web: {}
+
+    - name: Assert the node keeps the name stack.yaml gives it in Consul, Nomad and Vault
+      ansible.builtin.assert:
+        that:
+          - consul_node_name == 'ovh-vps'
+          - nomad_node_name == 'ovh-vps'
+          - vault_node_id == 'ovh-vps'
+        quiet: true
+      vars:
+        stack:
+          name: check
+          server: {address: 192.0.2.10, bootstrap_user: root, ops_user: ops, node_name: ovh-vps, public_interface: eth0, public_ports: [80, 443]}
+          network: {cidr: 10.77.0.0/24, clients: [laptop]}

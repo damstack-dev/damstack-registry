@@ -1,0 +1,45 @@
+apiVersion: damstack/v2
+name: seaweedfs
+kind: app
+description: A shared SeaweedFS object lake with an S3 API other apps read and write
+requires:
+  damstack: ">=0.8.0"
+  toolbox: ">=1.1.0, <2.0.0"
+  provides: [nomad, vault-kv]
+
+config: template/seaweedfs.yaml.tmpl
+done:
+  - "The S3 API answers inside the platform as the Consul service seaweedfs, on port 8333."
+  - "A client reads its secret key from Vault: damstack seaweedfs output keys_secret"
+  - "Set the identities and their actions for an app by editing apps.seaweedfs.identities."
+
+targets:
+  nomad:
+    steps:
+      - name: apply
+        title: The shared object lake
+        takes: 2 min
+        tofu:
+          dir: infra
+          action: apply
+          policy: &policy {dir: policy}
+        tunnel: true
+        confirm: true
+    commands:
+      plan:
+        tofu: {dir: infra, action: plan, policy: *policy}
+        tunnel: true
+      output:
+        tofu: {dir: infra, action: output}
+
+check:
+  answers: test/answers.yaml
+  platform: test/platform.yaml
+  steps:
+    - name: outputs
+      run:
+        - sh
+        - -c
+        - >-
+          cd "$DAMSTACK_STACK/infra" && export TF_DATA_DIR="$DAMSTACK_PROJECT/.damstack/work/tofu-test" TF_VAR_project="$DAMSTACK_PROJECT" &&
+          tofu init -backend=false -input=false -lockfile=readonly >/dev/null && tofu test -no-color

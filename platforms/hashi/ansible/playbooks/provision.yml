@@ -1,0 +1,483 @@
+---
+- name: Provision the server
+  hosts: stack
+  gather_facts: true
+  tasks:
+    - name: Keep the clock synchronized, which the certificates and tokens below rely on
+      ansible.builtin.include_role:
+        name: eugene_panin.base.timesync
+
+    - name: Authorize the SSH key of the project
+      ansible.builtin.include_tasks: tasks/project-key.yml
+
+    - name: Take the WireGuard keys of the devices
+      ansible.builtin.include_role:
+        name: eugene_panin.base.wireguard_client
+
+    - name: Configure the WireGuard interface
+      ansible.builtin.include_role:
+        name: eugene_panin.base.wireguard
+      vars:
+        wireguard_peers: "{{ wireguard_client_peers }}"
+
+    - name: Deny incoming except SSH, WireGuard and the declared ports
+      ansible.builtin.include_role:
+        name: eugene_panin.base.firewall
+
+    - name: Unpack the backup to restore from
+      ansible.builtin.include_tasks: tasks/restore-unpack.yml
+      when: stack_restore | length > 0
+
+    - name: Check whether Consul is installed yet
+      ansible.builtin.stat:
+        path: /usr/local/bin/consul
+      register: _stack_consul_binary
+      check_mode: false
+
+    - name: Run the Consul agent
+      ansible.builtin.include_role:
+        name: eugene_panin.hashistack.consul
+
+    - name: Restore Consul from the backup
+      ansible.builtin.command:
+        argv: [consul, snapshot, restore, "{{ stack_restore_hooks }}/consul.snap"]
+        creates: /etc/damstack/restored-consul
+      environment:
+        CONSUL_HTTP_ADDR: https://127.0.0.1:8501
+        CONSUL_CACERT: /etc/consul.d/tls/ca.pem
+        CONSUL_HTTP_TOKEN: "{{ consul_acl_bootstrap_token }}"
+      when: stack_restore | length > 0
+      no_log: true
+
+    - name: Mark Consul as restored, so that a second run does not restore it again
+      ansible.builtin.copy:
+        content: "{{ stack_restore | basename }}\n"
+        dest: /etc/damstack/restored-consul
+        owner: root
+        group: root
+        mode: "0644"
+      when: stack_restore | length > 0
+
+    # Consul does not let a token's secret change: a token whose secret
+    # damstack secret rotate made anew goes, and the tasks below make it again.
+    - name: Read the Consul tokens of Nomad, Alloy and Vault
+      ansible.builtin.uri:
+        url: "https://127.0.0.1:8501/v1/acl/token/{{ item.accessor | to_uuid }}"
+        headers:
+          X-Consul-Token: "{{ consul_acl_bootstrap_token }}"
+        ca_path: /etc/consul.d/tls/ca.pem
+        status_code: [200, 403, 404]
+        return_content: true
+      loop:
+        - {accessor: nomad-agent, secret: "{{ nomad_consul_token }}"}
+        - {accessor: alloy-discovery, secret: "{{ vault_alloy_consul_token }}"}
+        - {accessor: vault-service, secret: "{{ vault_vault_consul_token }}"}
+      check_mode: false
+      register: _stack_consul_tokens
+      when: not ansible_check_mode or _stack_consul_binary.stat.exists
+      no_log: true
+
+    - name: Delete the Consul tokens whose secret was made anew
+      community.general.consul_token:
+        accessor_id: "{{ item.item.accessor | to_uuid }}"
+        token: "{{ consul_acl_bootstrap_token }}"
+        scheme: https
+        host: 127.0.0.1
+        port: 8501
+        ca_path: /etc/consul.d/tls/ca.pem
+        state: absent
+      loop: "{{ _stack_consul_tokens.results | default([]) }}"
+      when:
+        - item.status | default(0) == 200
+        - item.json.SecretID != item.item.secret
+      no_log: true
+
+    - name: Ensure the policy the Nomad agent registers with
+      community.general.consul_policy:
+        name: nomad-agent
+        description: Nomad agents registering themselves and their workloads
+        rules: |
+          agent_prefix "" {
+            policy = "read"
+          }
+          node_prefix "" {
+            policy = "write"
+          }
+          service_prefix "" {
+            policy = "write"
+          }
+        token: "{{ consul_acl_bootstrap_token }}"
+        scheme: https
+        host: 127.0.0.1
+        port: 8501
+        ca_path: /etc/consul.d/tls/ca.pem
+        state: present
+      when: not ansible_check_mode or _stack_consul_binary.stat.exists
+      no_log: true
+
+    - name: Ensure the Nomad agent's Consul token
+      community.general.consul_token:
+        accessor_id: "{{ 'nomad-agent' | to_uuid }}"
+        secret_id: "{{ nomad_consul_token }}"
+        description: Nomad agent
+        policies:
+          - name: nomad-agent
+        token: "{{ consul_acl_bootstrap_token }}"
+        scheme: https
+        host: 127.0.0.1
+        port: 8501
+        ca_path: /etc/consul.d/tls/ca.pem
+        state: present
+      when: not ansible_check_mode or _stack_consul_binary.stat.exists
+      no_log: true
+
+    # Alloy finds the services to scrape in Consul's catalog, with a token of its
+    # own that only reads it (the DNS token it used could not, so no app metric
+    # was ever scraped). The datacenter is given, so it needs no agent access.
+    - name: Ensure the policy Alloy discovers services with
+      community.general.consul_policy:
+        name: alloy
+        description: Alloy reading the catalog to find what to scrape
+        rules: |
+          service_prefix "" {
+            policy = "read"
+          }
+          node_prefix "" {
+            policy = "read"
+          }
+        token: "{{ consul_acl_bootstrap_token }}"
+        scheme: https
+        host: 127.0.0.1
+        port: 8501
+        ca_path: /etc/consul.d/tls/ca.pem
+        state: present
+      when: not ansible_check_mode or _stack_consul_binary.stat.exists
+      no_log: true
+
+    - name: Ensure Alloy's Consul token
+      community.general.consul_token:
+        accessor_id: "{{ 'alloy-discovery' | to_uuid }}"
+        secret_id: "{{ vault_alloy_consul_token }}"
+        description: Alloy service discovery
+        policies:
+          - name: alloy
+        token: "{{ consul_acl_bootstrap_token }}"
+        scheme: https
+        host: 127.0.0.1
+        port: 8501
+        ca_path: /etc/consul.d/tls/ca.pem
+        state: present
+      when: not ansible_check_mode or _stack_consul_binary.stat.exists
+      no_log: true
+
+    # Vault registers itself in Consul (vault_extra_config), so apps reach it as
+    # active.vault.service.consul, which its certificate names, wherever it runs.
+    - name: Ensure the policy Vault registers itself with
+      community.general.consul_policy:
+        name: vault
+        description: Vault registering itself as the service vault
+        rules: |
+          service "vault" {
+            policy = "write"
+          }
+          agent_prefix "" {
+            policy = "read"
+          }
+          node_prefix "" {
+            policy = "read"
+          }
+        token: "{{ consul_acl_bootstrap_token }}"
+        scheme: https
+        host: 127.0.0.1
+        port: 8501
+        ca_path: /etc/consul.d/tls/ca.pem
+        state: present
+      when: not ansible_check_mode or _stack_consul_binary.stat.exists
+      no_log: true
+
+    - name: Ensure Vault's Consul token
+      community.general.consul_token:
+        accessor_id: "{{ 'vault-service' | to_uuid }}"
+        secret_id: "{{ vault_vault_consul_token }}"
+        description: Vault service registration
+        policies:
+          - name: vault
+        token: "{{ consul_acl_bootstrap_token }}"
+        scheme: https
+        host: 127.0.0.1
+        port: 8501
+        ca_path: /etc/consul.d/tls/ca.pem
+        state: present
+      when: not ansible_check_mode or _stack_consul_binary.stat.exists
+      no_log: true
+
+    - name: Resolve Consul names on the host and for the tunnel
+      ansible.builtin.include_role:
+        name: eugene_panin.hashistack.consul_dns
+
+    # The mesh's Envoy sidecars reach Consul's gRPC port, and Envoy (BoringSSL)
+    # refuses a server certificate with IP addresses when its CA constrains IP
+    # ranges, as the project CA does. So the gRPC port gets a certificate of its
+    # own from the same CA, with DNS names only, in a config file next to the
+    # role's (Consul reads the whole config dir).
+    - name: Issue Consul's gRPC certificate, with DNS names only
+      ansible.builtin.include_role:
+        name: eugene_panin.hashistack.tls_certificate
+      vars:
+        tls_certificate_ca_cert: "{{ stack_ca_cert }}"
+        tls_certificate_ca_key: "{{ stack_ca_key }}"
+        tls_certificate_dir: /etc/consul.d/tls
+        tls_certificate_name: grpc
+        tls_certificate_owner: consul
+        tls_certificate_group: consul
+        tls_certificate_common_name: "server.{{ consul_datacenter }}.consul"
+        tls_certificate_subject_alt_names:
+          - "DNS:server.{{ consul_datacenter }}.consul"
+          - DNS:localhost
+        tls_certificate_extended_key_usage:
+          - serverAuth
+
+    - name: Consul serves gRPC with it
+      ansible.builtin.copy:
+        dest: /etc/consul.d/grpc-tls.json
+        content: >-
+          {{ {'tls': {'grpc': {'cert_file': '/etc/consul.d/tls/grpc.pem',
+                               'key_file': '/etc/consul.d/tls/grpc-key.pem'}}} | to_nice_json }}
+        owner: consul
+        group: consul
+        mode: '0640'
+      register: _consul_grpc_tls
+
+    - name: Apply Consul's gRPC certificate
+      when: _consul_grpc_tls is changed or (tls_certificate_changed | default(false) | bool)
+      block:
+        - name: Restart Consul
+          ansible.builtin.systemd:
+            name: consul
+            state: restarted
+
+        - name: Consul answers again
+          ansible.builtin.wait_for:
+            host: 127.0.0.1
+            port: 8501
+            timeout: 120
+
+    - name: Run Vault
+      ansible.builtin.include_role:
+        name: eugene_panin.hashistack.vault
+
+    - name: Run Docker for the Nomad client
+      ansible.builtin.include_role:
+        name: eugene_panin.base.docker
+
+    # A registry login for the docker driver, so jobs pull private images. Written
+    # before the Nomad agent: nomad_extra_config points its auth.config at this file,
+    # so it must exist when the agent (re)starts. The agent config gains the plugin
+    # block on this run and the Nomad role restarts the agent itself; a later run that
+    # only changes the login does not touch the agent config, so the restart below
+    # applies it. Absent registry leaves nomad_extra_config {} and both are skipped.
+    - name: Give the Nomad client a container registry login for private images
+      when: ((stack.registry | default({})).server | default('')) | length > 0
+      block:
+        - name: The Nomad configuration directory exists
+          ansible.builtin.file:
+            path: "{{ nomad_config_dir }}"
+            state: directory
+            owner: root
+            group: root
+            mode: '0700'
+
+        - name: The registry auth file is in place
+          ansible.builtin.copy:
+            dest: "{{ nomad_docker_auth_file }}"
+            owner: root
+            group: root
+            mode: '0600'
+            content: >-
+              {{ {'auths': {stack.registry.server:
+                 {'auth': (stack.registry.username | default('') ~ ':' ~ vault_registry_password) | b64encode}}}
+                 | to_nice_json }}
+          no_log: true
+          register: _registry_auth
+
+    - name: Run the Nomad agent
+      ansible.builtin.include_role:
+        name: eugene_panin.hashistack.nomad
+
+    - name: Apply a changed registry login to the running Nomad agent
+      when:
+        - _registry_auth is defined
+        - _registry_auth is changed
+      ansible.builtin.systemd:
+        name: nomad
+        state: restarted
+
+    # consul-cni redirects a mesh task's traffic through its Envoy sidecar
+    # (transparent proxy). Kept in a directory of its own version, linked into the
+    # CNI plugin path; Nomad sees it after a restart.
+    - name: Give Nomad the consul-cni plugin for the service mesh
+      vars:
+        _cni_dir: "/opt/cni/consul-cni-{{ stack_consul_cni_version }}"
+        _cni_zip: "consul-cni_{{ stack_consul_cni_version }}_linux_{{ _stack_arch }}.zip"
+        _cni_url: "https://releases.hashicorp.com/consul-cni/{{ stack_consul_cni_version }}"
+      block:
+        - name: unzip is installed
+          ansible.builtin.apt:
+            name: unzip
+            state: present
+
+        - name: The consul-cni release directory exists
+          ansible.builtin.file:
+            path: "{{ _cni_dir }}"
+            state: directory
+            owner: root
+            group: root
+            mode: '0755'
+
+        - name: consul-cni is downloaded, verified against the published checksum
+          ansible.builtin.get_url:
+            url: "{{ _cni_url }}/{{ _cni_zip }}"
+            dest: "/opt/cni/{{ _cni_zip }}"
+            checksum: "sha256:{{ _cni_url }}/consul-cni_{{ stack_consul_cni_version }}_SHA256SUMS"
+            mode: '0644'
+          register: _cni_download
+          until: _cni_download is succeeded
+          retries: 5
+          delay: 5
+
+        - name: consul-cni is unpacked into its release directory
+          ansible.builtin.unarchive:
+            src: "/opt/cni/{{ _cni_zip }}"
+            dest: "{{ _cni_dir }}"
+            remote_src: true
+            creates: "{{ _cni_dir }}/consul-cni"
+
+        - name: consul-cni is in the plugin path Nomad reads
+          ansible.builtin.file:
+            src: "{{ _cni_dir }}/consul-cni"
+            dest: /opt/cni/bin/consul-cni
+            state: link
+          register: _consul_cni
+
+    - name: Let Nomad see a newly linked consul-cni
+      when: _consul_cni is changed
+      ansible.builtin.systemd:
+        name: nomad
+        state: restarted
+
+    - name: Ship host and app metrics and logs to the observability backends
+      ansible.builtin.include_role:
+        name: eugene_panin.observability.alloy
+      vars:
+        alloy_mimir_remote_write_url: "http://{{ stack_address }}:9009/api/v1/push"
+        alloy_loki_push_url: "http://{{ stack_address }}:3100/loki/api/v1/push"
+        alloy_host_metrics: true
+        alloy_journal_logs: true
+        alloy_extra_config: |
+          // App metrics: every Consul service tagged "metrics", scraped on /metrics
+          // and remote-written to Mimir. An app joins the set by registering with
+          // that tag — no change here.
+          discovery.consul "apps" {
+            server     = "https://127.0.0.1:8501"
+            datacenter = "{{ consul_datacenter }}"
+            token      = "{{ vault_alloy_consul_token }}"
+            tls_config {
+              insecure_skip_verify = true
+            }
+          }
+
+          discovery.relabel "apps" {
+            targets = discovery.consul.apps.targets
+
+            rule {
+              source_labels = ["__meta_consul_tags"]
+              regex         = ".*,metrics,.*"
+              action        = "keep"
+            }
+
+            rule {
+              source_labels = ["__meta_consul_service"]
+              target_label  = "app"
+            }
+          }
+
+          prometheus.scrape "apps" {
+            targets    = discovery.relabel.apps.output
+            forward_to = [prometheus.remote_write.mimir.receiver]
+          }
+
+    - name: Read the Vault policy the backup takes snapshots with
+      ansible.builtin.uri:
+        url: "https://{{ stack_address }}:8200/v1/sys/policies/acl/backup"
+        ca_path: /etc/vault.d/tls/ca.pem
+        headers:
+          X-Vault-Token: "{{ stack_vault_token }}"
+        status_code: [200, 404]
+      register: _stack_backup_policy
+      check_mode: false
+      no_log: true
+
+    - name: Ensure the Vault policy allows the snapshot and nothing else
+      ansible.builtin.uri:
+        url: "https://{{ stack_address }}:8200/v1/sys/policies/acl/backup"
+        ca_path: /etc/vault.d/tls/ca.pem
+        method: PUT
+        headers:
+          X-Vault-Token: "{{ stack_vault_token }}"
+        body_format: json
+        body:
+          policy: "{{ _stack_backup_policy_text }}"
+        status_code: [204]
+      when: _stack_backup_policy.json.data.policy | default('') != _stack_backup_policy_text
+      changed_when: true
+      no_log: true
+      vars:
+        _stack_backup_policy_text: |
+          path "sys/storage/raft/snapshot" {
+            capabilities = ["read"]
+          }
+
+    - name: Look up the Vault token of the backup
+      ansible.builtin.uri:
+        url: "https://{{ stack_address }}:8200/v1/auth/token/lookup"
+        ca_path: /etc/vault.d/tls/ca.pem
+        method: POST
+        headers:
+          X-Vault-Token: "{{ stack_vault_token }}"
+        body_format: json
+        body:
+          token: "{{ vault_backup_vault_token }}"
+        status_code: [200, 400, 403]
+      register: _stack_backup_token
+      check_mode: false
+      no_log: true
+
+    - name: Create the Vault token of the backup, renewed by every run
+      ansible.builtin.uri:
+        url: "https://{{ stack_address }}:8200/v1/auth/token/create-orphan"
+        ca_path: /etc/vault.d/tls/ca.pem
+        method: POST
+        headers:
+          X-Vault-Token: "{{ stack_vault_token }}"
+        body_format: json
+        body:
+          id: "{{ vault_backup_vault_token }}"
+          policies: [backup]
+          period: 768h
+          display_name: backup
+        status_code: [200]
+      when: _stack_backup_token.status != 200
+      changed_when: true
+      no_log: true
+
+    - name: Install the hook that copies the host volumes, stopping the jobs that ask for it
+      ansible.builtin.copy:
+        src: backup-volumes
+        dest: /usr/local/sbin/damstack-backup-volumes
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Back up the copies of the host volumes and the snapshots of Consul, Nomad and Vault
+      ansible.builtin.include_role:
+        name: eugene_panin.base.backup
