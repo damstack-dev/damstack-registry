@@ -1,0 +1,45 @@
+apiVersion: damstack/v2
+name: nats
+kind: app
+description: A shared NATS (JetStream) bus other apps publish and subscribe on
+requires:
+  damstack: ">=0.8.0"
+  toolbox: ">=1.1.0, <2.0.0"
+  provides: [nomad, vault-kv]
+
+config: template/nats.yaml.tmpl
+done:
+  - "NATS answers inside the platform as the Consul service nats, on port 4222."
+  - "A client reads its password from Vault: damstack nats output credentials_secret"
+  - "Lock it down for an app by replacing apps.nats.config and apps.nats.users (e.g. Sauron's nats.conf)."
+
+targets:
+  nomad:
+    steps:
+      - name: apply
+        title: The shared NATS bus
+        takes: 2 min
+        tofu:
+          dir: infra
+          action: apply
+          policy: &policy {dir: policy}
+        tunnel: true
+        confirm: true
+    commands:
+      plan:
+        tofu: {dir: infra, action: plan, policy: *policy}
+        tunnel: true
+      output:
+        tofu: {dir: infra, action: output}
+
+check:
+  answers: test/answers.yaml
+  platform: test/platform.yaml
+  steps:
+    - name: outputs
+      run:
+        - sh
+        - -c
+        - >-
+          cd "$DAMSTACK_STACK/infra" && export TF_DATA_DIR="$DAMSTACK_PROJECT/.damstack/work/tofu-test" TF_VAR_project="$DAMSTACK_PROJECT" &&
+          tofu init -backend=false -input=false -lockfile=readonly >/dev/null && tofu test -no-color
