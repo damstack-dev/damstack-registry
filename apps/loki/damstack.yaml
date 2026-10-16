@@ -1,0 +1,44 @@
+apiVersion: damstack/v2
+name: loki
+kind: app
+description: A shared Loki log store other apps and the platform's collector push to
+requires:
+  damstack: ">=0.8.0"
+  toolbox: ">=1.1.0, <2.0.0"
+  provides: [nomad]
+
+config: template/loki.yaml.tmpl
+done:
+  - "Loki answers inside the platform as the Consul service loki, on port 3100."
+  - "The platform's Alloy pushes logs to it; Grafana queries it."
+
+targets:
+  nomad:
+    steps:
+      - name: apply
+        title: The shared log store
+        takes: 2 min
+        tofu:
+          dir: infra
+          action: apply
+          policy: &policy {dir: policy}
+        tunnel: true
+        confirm: true
+    commands:
+      plan:
+        tofu: {dir: infra, action: plan, policy: *policy}
+        tunnel: true
+      output:
+        tofu: {dir: infra, action: output}
+
+check:
+  answers: test/answers.yaml
+  platform: test/platform.yaml
+  steps:
+    - name: outputs
+      run:
+        - sh
+        - -c
+        - >-
+          cd "$DAMSTACK_STACK/infra" && export TF_DATA_DIR="$DAMSTACK_PROJECT/.damstack/work/tofu-test" TF_VAR_project="$DAMSTACK_PROJECT" &&
+          tofu init -backend=false -input=false -lockfile=readonly >/dev/null && tofu test -no-color
