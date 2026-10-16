@@ -1,0 +1,112 @@
+# The one file to edit. Ansible, OpenTofu and the policies of the hashi stack read it.
+# Secrets are not here: they are in vault.yml, encrypted.
+
+# Name of the stack, also the Consul and Nomad datacenter.
+name: {{ .project }}
+
+server:
+  # Public address of the server, as the provider gave it.
+  address: {{ yaml .server_address }}
+  # The user you log in with today; the bootstrap step replaces it with ops_user.
+  bootstrap_user: {{ yaml .bootstrap_user }}
+  # The one user that may log in afterwards, with your SSH key. Chosen once: a set up server
+  # refuses another name.
+  ops_user: {{ yaml .ops_user }}
+  # A user of that name that damstack did not create is left alone, unless this says to take
+  # it over: then your key is added to it, and its other keys stay.
+  adopt_user: false
+  # Name of the server in Consul, Nomad and Vault. Chosen once: renaming a running node
+  # breaks the Vault raft and leaves Nomad's jobs on the old node.
+  node_name: server
+  # Network interface of the server to the internet; auto takes the one of its default route.
+  public_interface: auto
+  # Ports open to the internet: 80 and 443 for Traefik. An app opens its own, under
+  # apps.<app>.public_ports.
+  public_ports: [80, 443]
+
+# Private network over WireGuard. The server takes the first address of this /24,
+# each client the next ones, in order.
+network:
+  # Chosen once, free among your projects: a set up server keeps it.
+  cidr: {{ .network_cidr }}
+  clients: {{ yaml .wireguard_clients }}
+
+# Admin pages: consul., nomad. and vault.<infra_domain>, through the private network only.
+infra_domain: {{ yaml .infra_domain }}
+# Contact of the Let's Encrypt account of Traefik.
+acme_email: {{ yaml .acme_email }}
+
+# Where DNS records go, the platform's and the apps'. With cloudflare, records of every domain
+# in zones, or under one of them, go in through the Cloudflare API; with manual, and for
+# domains in no zone, damstack dns-records prints them, to be created by hand.
+dns:
+{{- if eq .dns_provider "cloudflare" }}
+  provider: cloudflare
+  zones: {{ yaml .dns_zones }}
+{{- else }}
+  provider: manual
+  zones: []
+{{- end }}
+
+# Let's Encrypt checks the admin domain is yours with a DNS-01 challenge through the API of
+# its DNS provider, named as in https://go-acme.github.io/lego/dns/. With cloudflare the
+# token is vault_cloudflare_traefik_token; with another, the NAME=value pairs in
+# vault_acme_dns_env.
+certificates:
+  # letsencrypt-dns: admin pages get a Let's Encrypt wildcard through DNS-01 (needs
+  # a DNS token below). internal-ca: signed by the project's own CA, no token.
+  mode: {{ yaml .infra_tls }}
+{{- if eq .infra_tls "letsencrypt-dns" }}
+  dns_provider: {{ if eq .dns_provider "cloudflare" }}cloudflare{{ else }}{{ yaml .acme_dns_provider }}{{ end }}
+{{- end }}
+
+# Traefik's dashboard at traefik.<infra_domain>, next to the other admin pages: through
+# WireGuard only. It has no login of its own, so anyone on the private network sees the
+# routes.
+traefik:
+  dashboard: false
+
+# Vault seals itself every time it starts. true keeps its unseal keys on the server, readable
+# by root only, so it unseals itself after a reboot; false leaves it sealed, and the platform
+# down, until the next damstack deploy, with the keys only in vault.yml.
+vault:
+  auto_unseal: true
+{{- if eq .private_registry "yes" }}
+
+# A container registry the Nomad client logs in to, so jobs can pull private images.
+# The password is the secret vault_registry_password. Remove this block for none.
+registry:
+  server: {{ yaml .registry_server }}
+  username: {{ yaml .registry_username }}
+{{- end }}
+{{- if eq .sso "yes" }}
+
+# Single sign-on: people sign in to Vault with Google, only these addresses, and to Nomad
+# through Vault (the admins get everything in Vault and management in Nomad). The client
+# secret is vault_sso_google_client_secret. The bootstrap tokens stay as the way in when
+# Google is out of reach. Remove this block to turn it off.
+sso:
+  google_client_id: {{ yaml .sso_google_client_id }}
+  admins: {{ yaml .sso_admins }}
+  # How long a sign-in lasts, in hours.
+  session_hours: 8
+{{- end }}
+
+# Backups, made with restic: on the server every night, and on your laptop when damstack
+# pulls them, every pull_every while the laptop is on (off: only damstack backup pull).
+# restic compresses, deduplicates and encrypts them with vault_backup_password; damstack
+# backup status shows what is on the laptop.
+backup:
+  schedule: "03:00"
+  compression: auto
+  server:
+    path: /var/backups/restic
+    keep: {daily: 7, weekly: 4, monthly: 6}
+  laptop:
+    path: ~/Backups/{{ .project }}
+    keep: {daily: 30, weekly: 12, monthly: 24}
+    pull_every: 1h
+
+# Apps on the platform, each added with damstack app add <app>, under its name. Their DNS
+# records go where dns says, with those of the platform.
+apps: {}

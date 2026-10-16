@@ -1,0 +1,349 @@
+apiVersion: damstack/v2
+name: hashi
+description: Consul, Vault and Nomad on one server, over WireGuard, with Traefik and backups, a platform for apps such as mail
+needs:
+  - a server with Ubuntu 24.04, its IP address and root password
+  - a domain for the admin pages, on Cloudflare or anywhere
+  - the WireGuard app on the devices that open them
+takes: about 20 minutes
+summary:
+  - label: server
+    value: "{{ .server_address }}, you log in as {{ .ops_user }} afterwards"
+  - label: admin
+    value: "consul., nomad., vault.{{ .infra_domain }}"
+  - label: devices
+    value: '{{ join ", " .wireguard_clients }}'
+  - label: network
+    value: "{{ .network_cidr }}, through WireGuard"
+done:
+  - "https://nomad.{{ .config.infra_domain }}    token: damstack token nomad"
+  - "https://vault.{{ .config.infra_domain }}    token: damstack token vault"
+  - "https://consul.{{ .config.infra_domain }}   token: damstack token consul"
+  - "They open through WireGuard."
+  - "{{ if not .config.apps }}Next, an app such as mail: damstack app add mail{{ end }}"
+tokens:
+  nomad: vault_nomad_acl_bootstrap_token
+  consul: vault_consul_acl_bootstrap_token
+  vault: vault_root_token
+provides: [nomad, vault-kv, consul, ingress-traefik, observability]
+app_env:
+  NOMAD_ADDR: 'https://{{ firstHost .config.network.cidr }}:4646'
+  NOMAD_CACERT: '{{ .dir.project }}/ca.pem'
+  NOMAD_TOKEN: '{{ secret "vault_nomad_acl_bootstrap_token" }}'
+  CONSUL_HTTP_ADDR: 'https://{{ firstHost .config.network.cidr }}:8501'
+  CONSUL_CACERT: '{{ .dir.project }}/ca.pem'
+  CONSUL_HTTP_TOKEN: '{{ secret "vault_consul_acl_bootstrap_token" }}'
+  VAULT_ADDR: 'https://{{ firstHost .config.network.cidr }}:8200'
+  VAULT_CACERT: '{{ .dir.project }}/ca.pem'
+  VAULT_TOKEN: '{{ secret "vault_root_token" }}'
+  TF_VAR_vault_kv_path: secret
+  TF_VAR_state_passphrase: '{{ secret "vault_tofu_state_passphrase" }}'
+requires:
+  damstack: ">=0.10.0"
+  toolbox: ">=1.1.0, <2.0.0"
+  host: [ssh-key, wireguard]
+
+questions:
+  - name: server_address
+    section: Server
+    checks: [ssh-port]
+    prompt: IP address of the server, from your provider's panel
+    pattern: "^[0-9]{1,3}(\\.[0-9]{1,3}){3}$"
+  - name: bootstrap_user
+    prompt: The user you log in to the server with today
+    default: root
+    pattern: "^[a-z_][a-z0-9_-]{0,31}$"
+    advanced: true
+  - name: ops_user
+    prompt: The user you will log in to the server with from now on
+    default: ops
+    pattern: "^[a-z_][a-z0-9_-]{0,31}$"
+    advanced: true
+  - name: network_cidr
+    prompt: The private network of the project, a /24 no other project on your devices uses
+    default: "{{ freeSubnet }}"
+    pattern: "^10\\.[0-9]{1,3}\\.[0-9]{1,3}\\.0/24$"
+    advanced: true
+  - name: infra_domain
+    section: Admin pages
+    note: They open only on your devices, through WireGuard.
+    prompt: Domain for them, such as admin.example.com
+    pattern: "^[a-z0-9-]+(\\.[a-z0-9-]+)+$"
+  - name: acme_email
+    section: Admin pages
+    prompt: Your email, for Let's Encrypt about the certificates
+    pattern: "^[^@\\s]+@[^@\\s]+$"
+  - name: infra_tls
+    section: Admin pages
+    prompt: How the admin pages get their certificate
+    note: >-
+      letsencrypt-dns needs API access to the domain's DNS (a token); internal-ca
+      signs them with the project's own CA (no token, trusted by damstack trust) —
+      pick it when you can only add DNS records by hand.
+    type: enum
+    options: [letsencrypt-dns, internal-ca]
+    default: letsencrypt-dns
+  - name: dns_provider
+    section: Admin pages
+    prompt: Where the DNS of that domain is
+    type: enum
+    options: [cloudflare, other]
+    default: cloudflare
+    when: infra_tls=letsencrypt-dns
+  - name: dns_zones
+    section: Admin pages
+    prompt: Domains on Cloudflare damstack may add records to, that one among them
+    type: list
+    pattern: "^[a-z0-9-]+(\\.[a-z0-9-]+)+$"
+    when: dns_provider=cloudflare
+  - name: acme_dns_provider
+    section: Admin pages
+    prompt: Its DNS provider, by its name in https://go-acme.github.io/lego/dns/, such as hetzner or ovh
+    pattern: "^[a-z0-9][a-z0-9.-]*$"
+    when: dns_provider=other
+  - name: wireguard_clients
+    section: Your devices
+    prompt: Devices that may open the admin pages, such as laptop and phone
+    type: list
+    default: [laptop]
+    pattern: "^[a-z][a-z0-9-]{0,30}$"
+  - name: private_registry
+    section: Private images
+    note: >-
+      For apps whose images are in a private container registry: the Nomad client
+      logs in to it so it can pull them. Leave it off for public images only.
+    prompt: Do the apps pull images from a private registry?
+    type: enum
+    options: [no, yes]
+    default: no
+    advanced: true
+  - name: registry_server
+    section: Private images
+    prompt: The registry host, such as ghcr.io
+    default: ghcr.io
+    pattern: "^[a-z0-9.-]+(:[0-9]+)?$"
+    when: private_registry=yes
+  - name: registry_username
+    section: Private images
+    prompt: The username the login uses (any value for a token-only registry)
+    pattern: "^[A-Za-z0-9._-]+$"
+    when: private_registry=yes
+  - name: sso
+    section: Single sign-on
+    note: >-
+      People sign in to Vault with Google, only the addresses you list, and to Nomad
+      through Vault. Needs a Google OAuth client (Web application) with the redirect URIs
+      https://vault.<infra_domain>/ui/vault/auth/oidc/oidc/callback and
+      http://localhost:8250/oidc/callback.
+    prompt: Sign in with Google?
+    type: enum
+    options: [no, yes]
+    default: no
+    advanced: true
+  - name: sso_google_client_id
+    section: Single sign-on
+    prompt: Client ID of the Google OAuth client
+    pattern: "\\.apps\\.googleusercontent\\.com$"
+    when: sso=yes
+  - name: sso_admins
+    section: Single sign-on
+    prompt: Google addresses of the admins, the only ones let in
+    type: list
+    pattern: "^[^@\\s,]+@[^@\\s,]+$"
+    when: sso=yes
+
+secrets:
+  - name: vault_stack_ca_key
+    generate: ca
+    cert: ca.pem
+    rotate: true
+  - name: vault_consul_gossip_key
+    generate: base64
+    keep: a gossip key changes in two runs, which damstack does not do yet
+  - name: vault_consul_acl_bootstrap_token
+    generate: uuid
+    keep: Consul's ACLs were bootstrapped with it
+  - name: vault_consul_acl_dns_token
+    generate: uuid
+    rotate: true
+  - name: vault_consul_acl_agent_token
+    generate: uuid
+    rotate: true
+  - name: vault_nomad_gossip_key
+    generate: base64
+    keep: a gossip key changes in two runs, which damstack does not do yet
+  - name: vault_nomad_acl_bootstrap_token
+    generate: uuid
+    keep: Nomad's ACLs were bootstrapped with it
+  - name: vault_nomad_consul_token
+    generate: uuid
+  - name: vault_vault_consul_token
+    generate: uuid
+    rotate: true
+  - name: vault_alloy_consul_token
+    generate: uuid
+    rotate: true
+  - name: vault_tofu_state_passphrase
+    generate: hex
+    keep: the OpenTofu state is encrypted with it
+  - name: vault_backup_password
+    generate: password
+    keep: old backups need it
+  - name: vault_backup_vault_token
+    generate: uuid
+  - name: vault_cloudflare_api_token
+    checks: [{cloudflare-token: dns_zones}]
+    ask: Cloudflare token for the DNS records (Zone DNS Edit and Zone Read on those domains)
+    new_at: https://dash.cloudflare.com/profile/api-tokens
+    when: dns_provider=cloudflare
+  - name: vault_cloudflare_traefik_token
+    checks: [cloudflare-token]
+    ask: Cloudflare token for the certificate of the admin pages (the same one does, or one for that domain only)
+    new_at: https://dash.cloudflare.com/profile/api-tokens
+    when: dns_provider=cloudflare
+  - name: vault_acme_dns_env
+    ask: >-
+      The credentials of that provider for the certificate of the admin pages, as NAME=value pairs
+      separated by spaces, with the names its page in https://go-acme.github.io/lego/dns/ gives
+    when: dns_provider=other
+  - name: vault_registry_password
+    ask: The password or token the Nomad client pulls private images with
+    new_at: https://github.com/settings/tokens/new?scopes=read:packages&description=damstack
+    when: private_registry=yes
+  - name: vault_sso_google_client_secret
+    ask: The secret of the Google OAuth client people sign in with
+    when: sso=yes
+
+config: template/stack.yaml.tmpl
+
+server:
+  address: "{{ .config.server.address }}"
+  first_user: "{{ .config.server.bootstrap_user }}"
+  ops_user: "{{ .config.server.ops_user }}"
+  tunnel: "{{ firstHost .config.network.cidr }}"
+  tunnel_help: >-
+    damstack tunnel show {{ index .config.network.clients 0 }} puts the tunnel into the WireGuard app;
+    turn it on there, and any other VPN off.
+  wireguard:
+    secret: vault_wireguard
+    devices: network.clients
+    network: "{{ .config.network.cidr }}"
+    endpoint: "{{ .config.server.address }}:51820"
+    apply: wireguard
+  ssh_key:
+    secret: vault_ssh_project_key
+    apply: access
+
+backup:
+  from: "{{ .config.backup.server.path }}"
+  to: "{{ .config.backup.laptop.path }}"
+  password: '{{ secret "vault_backup_password" }}'
+  keep:
+    daily: "{{ .config.backup.laptop.keep.daily }}"
+    weekly: "{{ .config.backup.laptop.keep.weekly }}"
+    monthly: "{{ .config.backup.laptop.keep.monthly }}"
+  every: "{{ .config.backup.laptop.pull_every }}"
+
+steps:
+  - name: bootstrap
+    title: Securing the server
+    takes: 1 min
+    ansible: &ansible
+      playbook: ansible/playbooks/bootstrap.yml
+      inventory: ansible/inventory
+      requirements: ansible/requirements.yml
+    once: true
+  - name: provision
+    title: Consul, Vault, Nomad and WireGuard
+    takes: 6 min
+    ansible:
+      <<: *ansible
+      playbook: ansible/playbooks/provision.yml
+    keep:
+      file: .damstack/work/vault-init.json
+      secrets:
+        vault_unseal_keys: keys_base64
+        vault_root_token: root_token
+  - name: apply
+    title: Traefik and the admin pages
+    takes: 1 min
+    tofu:
+      dir: infra
+      action: apply
+      policy: &policy {dir: policy, nomad_jobs: true}
+      outputs: {dns_records: dns/hashi.json}
+    tunnel: true
+    env: &tofu
+      TF_VAR_state_passphrase: '{{ secret "vault_tofu_state_passphrase" }}'
+      TF_VAR_stack_ca_key: '{{ secret "vault_stack_ca_key" }}'
+      TF_VAR_traefik_cloudflare_token: '{{ secret "vault_cloudflare_traefik_token" }}'
+      TF_VAR_acme_dns_env: '{{ secret "vault_acme_dns_env" }}'
+      CLOUDFLARE_API_TOKEN: '{{ secret "vault_cloudflare_api_token" }}'
+      CONSUL_HTTP_ADDR: 'https://{{ firstHost .config.network.cidr }}:8501'
+      CONSUL_CACERT: '{{ .dir.project }}/ca.pem'
+      CONSUL_HTTP_TOKEN: '{{ secret "vault_consul_acl_bootstrap_token" }}'
+      NOMAD_ADDR: 'https://{{ firstHost .config.network.cidr }}:4646'
+      NOMAD_CACERT: '{{ .dir.project }}/ca.pem'
+      NOMAD_TOKEN: '{{ secret "vault_nomad_acl_bootstrap_token" }}'
+      VAULT_ADDR: 'https://{{ firstHost .config.network.cidr }}:8200'
+      VAULT_CACERT: '{{ .dir.project }}/ca.pem'
+      VAULT_TOKEN: '{{ secret "vault_root_token" }}'
+      TF_VAR_sso_google_client_secret: '{{ secret "vault_sso_google_client_secret" }}'
+    confirm: true
+  - name: restore-data
+    title: The data of the apps, from the backup
+    takes: 1 min
+    ansible:
+      <<: *ansible
+      playbook: ansible/playbooks/restore.yml
+    restore: true
+    after_apps: true
+  - name: dns
+    title: DNS records
+    takes: 10 s
+    tofu:
+      dir: dns
+      action: apply
+      policy: {dir: policy}
+    env: &dns
+      TF_VAR_state_passphrase: '{{ secret "vault_tofu_state_passphrase" }}'
+      CLOUDFLARE_API_TOKEN: '{{ secret "vault_cloudflare_api_token" }}'
+    after_apps: true
+    confirm: true
+
+commands:
+  plan:
+    tofu: {dir: infra, action: plan, policy: *policy}
+    tunnel: true
+    env: *tofu
+  output:
+    tofu: {dir: infra, action: output}
+    env: *tofu
+  dns-plan:
+    tofu: {dir: dns, action: plan, policy: {dir: policy}}
+    env: *dns
+  dns-records:
+    tofu: {dir: dns, action: output}
+    env: *dns
+  provision:
+    ansible:
+      <<: *ansible
+      playbook: ansible/playbooks/provision.yml
+  access:
+    title: The SSH key of the project
+    ansible:
+      <<: *ansible
+      playbook: ansible/playbooks/access.yml
+  wireguard:
+    title: The keys of the private network
+    ansible:
+      <<: *ansible
+      playbook: ansible/playbooks/wireguard.yml
+
+check:
+  answers: test/answers.yaml
+  steps:
+    - name: resolve
+      ansible:
+        <<: *ansible
+        playbook: test/resolve.yml
