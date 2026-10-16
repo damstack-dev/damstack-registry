@@ -5,18 +5,29 @@ stacks:
   url: https://github.com/damstack-dev/damstack-registry
   path: platforms/hashi
   description: Consul, Vault and Nomad on one server, over WireGuard, with Traefik and backups, a platform for apps such as mail
+  provides:
+  - nomad@1
+  - vault-kv@1
+  - consul@1
+  - ingress-traefik@1
+  - observability@1
 - name: grafana
   kind: app
   platform: hashi
   url: https://github.com/damstack-dev/damstack-registry
   path: apps/grafana
   description: Grafana for the platform, with Mimir and Loki wired as data sources
+  uses:
+  - metrics@1
+  - logs@1
 - name: loki
   kind: app
   platform: hashi
   url: https://github.com/damstack-dev/damstack-registry
   path: apps/loki
   description: A shared Loki log store other apps and the platform's collector push to
+  provides:
+  - logs@1
 - name: mail
   kind: app
   platform: hashi
@@ -29,27 +40,38 @@ stacks:
   url: https://github.com/damstack-dev/damstack-registry
   path: apps/mimir
   description: A shared Mimir metric store the platform collector remote_writes to
+  provides:
+  - metrics@1
 - name: nats
   kind: app
   platform: hashi
   url: https://github.com/damstack-dev/damstack-registry
   path: apps/nats
   description: A shared NATS (JetStream) bus other apps publish and subscribe on
+  provides:
+  - nats@2
 - name: odoo
   kind: app
   platform: hashi
   url: https://github.com/damstack-dev/damstack-registry
   path: apps/odoo
   description: Odoo with its PostgreSQL, on a Nomad platform such as hashi
+  requires:
+  - capability: postgres@16
+    when: postgres.mode=external
 - name: postgres
   kind: app
   platform: hashi
   url: https://github.com/damstack-dev/damstack-registry
   path: apps/postgres
   description: A shared PostgreSQL other apps use when they set postgres.mode external
+  provides:
+  - postgres@16
 - name: seaweedfs
   kind: app
   platform: hashi
   url: https://github.com/damstack-dev/damstack-registry
   path: apps/seaweedfs
   description: A shared SeaweedFS object lake with an S3 API other apps read and write
+  provides:
+  - s3@1

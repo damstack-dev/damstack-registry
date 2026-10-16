@@ -17,6 +17,9 @@ After the deploy, `damstack mimir output` prints `host`, `http_port` and
 `service_name`. The platform's Alloy remote_writes metrics to `host:http_port`; Grafana
 queries it.
 
+It provides `metrics@1`, Prometheus queries under `/prometheus`, for the apps
+that require or use metrics, such as Grafana.
+
 ## Development
 
 ```sh

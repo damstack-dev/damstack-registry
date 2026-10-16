@@ -3,9 +3,11 @@ name: postgres
 kind: app
 description: A shared PostgreSQL other apps use when they set postgres.mode external
 requires:
-  damstack: ">=0.8.0"
+  damstack: ">=0.20.0"
   toolbox: ">=1.1.0, <2.0.0"
   provides: [nomad, vault-kv]
+
+provides: [postgres@16]
 
 config: template/postgres.yaml.tmpl
 done:

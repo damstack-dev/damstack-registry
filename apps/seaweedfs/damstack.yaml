@@ -3,9 +3,11 @@ name: seaweedfs
 kind: app
 description: A shared SeaweedFS object lake with an S3 API other apps read and write
 requires:
-  damstack: ">=0.8.0"
+  damstack: ">=0.20.0"
   toolbox: ">=1.1.0, <2.0.0"
   provides: [nomad, vault-kv]
+
+provides: [s3@1]
 
 config: template/seaweedfs.yaml.tmpl
 done:

@@ -22,6 +22,9 @@ them with `damstack edit`: `image` (base Odoo, default `odoo:19.0`), `postgres`
 (`mode: bundled` with its `image`, or `mode: external` with `host`/`port` for a
 shared PostgreSQL), `db_name`, `workers`, `demo`.
 
+With `postgres.mode: external` it requires `postgres@16`, such as the
+`postgres` app: `damstack app add odoo` brings one when the project has none.
+
 ## Addons
 
 The image is base Odoo — no addons baked in. Addons are delivered **separately**

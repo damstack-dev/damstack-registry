@@ -25,6 +25,13 @@ After the deploy:
 
 Deploy `mimir` and `loki` before Grafana so its data sources resolve.
 
+It uses `metrics@1` and `logs@1`: `damstack app add grafana` offers the
+providers the platform has, and each one connected is a data source, at the
+address, port and `path` the platform's Consul gives, the first metrics one the
+default. Without providers of one, its data source is as before: Mimir or Loki at
+`mimir_host`/`loki_host`, by default `mimir.service.consul:9009` and
+`loki.service.consul:3100`.
+
 ## Development
 
 ```sh

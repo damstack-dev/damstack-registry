@@ -17,6 +17,8 @@ After the deploy, `damstack loki output` prints `host`, `http_port` and
 `service_name`. The platform's Alloy pushes logs to `host:http_port`; Grafana
 queries it.
 
+It provides `logs@1`, for the apps that require or use logs, such as Grafana.
+
 ## Development
 
 ```sh
