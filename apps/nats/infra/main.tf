@@ -4,7 +4,7 @@ locals {
 }
 
 module "nats" {
-  source = "git::https://github.com/eugene-panin/terraform-nomad-nats.git?ref=v0.1.4"
+  source = "git::https://github.com/eugene-panin/terraform-nomad-nats.git?ref=v0.1.5"
 
   users  = local.nats.users
   config = local.nats.config
@@ -12,4 +12,5 @@ module "nats" {
   # allow, keep_open_ports}).
   mesh          = try(local.nats.mesh, {})
   vault_kv_path = var.vault_kv_path
+  service_tags  = ["damstack.provides=nats@2"]
 }

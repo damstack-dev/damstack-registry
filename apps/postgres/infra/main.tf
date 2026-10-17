@@ -4,7 +4,7 @@ locals {
 }
 
 module "postgres" {
-  source = "git::https://github.com/eugene-panin/terraform-nomad-postgres.git?ref=v0.1.7"
+  source = "git::https://github.com/eugene-panin/terraform-nomad-postgres.git?ref=v0.1.8"
 
   image      = try(local.postgres.image, "postgres:16.10")
   admin_user = try(local.postgres.admin_user, "postgres")
@@ -13,4 +13,5 @@ module "postgres" {
   # allow, keep_open_ports}).
   mesh          = try(local.postgres.mesh, {})
   vault_kv_path = var.vault_kv_path
+  service_tags  = ["damstack.provides=postgres@16"]
 }
