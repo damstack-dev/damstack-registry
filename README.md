@@ -27,6 +27,7 @@ what one promises provides the next major. The ones in use:
 | `vault-kv@1` | a Vault KV engine for the apps' secrets, `VAULT_*` in their steps | hashi |
 | `consul@1` | Consul and its DNS, `CONSUL_*` in the apps' steps | hashi |
 | `ingress-traefik@1` | Traefik, routing by the tags of Nomad services | hashi |
+| `ingress-public@1` | a public HTTP(S) entry with certificates, routing to Consul services by Traefik-format tags (`traefik.enable`, `traefik.http.routers.*`) | hashi |
 | `observability@1` | the platform's Alloy, collecting metrics and logs | hashi |
 | `logs@1` | a Loki push and query HTTP API | loki |
 | `metrics@1` | a Prometheus query API, under the service meta `path` | mimir |

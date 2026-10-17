@@ -5,7 +5,8 @@ description: Grafana for the platform, with the metrics and logs of the project 
 requires:
   damstack: ">=0.20.0"
   toolbox: ">=1.1.0, <2.0.0"
-  provides: [nomad, vault-kv, ingress-traefik]
+  provides: [nomad, vault-kv]
+  capabilities: [ingress-public@1]
 
 uses: [metrics@1, logs@1]
 
