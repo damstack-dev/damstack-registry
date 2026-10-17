@@ -1,7 +1,7 @@
 apiVersion: damstack/v2
 name: grafana
 kind: app
-description: Grafana for the platform, with Mimir and Loki wired as data sources
+description: Grafana for the platform, with the metrics and logs of the project as data sources
 requires:
   damstack: ">=0.20.0"
   toolbox: ">=1.1.0, <2.0.0"

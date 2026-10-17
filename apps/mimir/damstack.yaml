@@ -18,7 +18,7 @@ targets:
   nomad:
     steps:
       - name: apply
-        title: The shared log store
+        title: The shared metric store
         takes: 2 min
         tofu:
           dir: infra
