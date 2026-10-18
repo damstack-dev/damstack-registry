@@ -10,43 +10,7 @@ variable "state_passphrase" {
 }
 
 variable "stack_ca_key" {
-  description = "PEM private key of the project's CA; when certificates.mode is internal-ca it signs the admin-pages wildcard. Kept in vault.yml of the project."
+  description = "PEM private key of the project's CA; it signs the certificate of the admin pages, for *.service.consul. Kept in vault.yml of the project."
   type        = string
   sensitive   = true
-  default     = ""
-}
-
-variable "traefik_cloudflare_token" {
-  description = "Cloudflare token Traefik answers DNS-01 challenges with when certificates.dns_provider is cloudflare; kept in vault.yml of the project."
-  type        = string
-  sensitive   = true
-  ephemeral   = true
-  default     = ""
-}
-
-variable "acme_dns_env" {
-  description = "Credentials of another DNS provider for the DNS-01 challenge, as NAME=value pairs separated by spaces; kept in vault.yml of the project."
-  type        = string
-  sensitive   = true
-  ephemeral   = true
-  default     = ""
-
-  validation {
-    condition     = alltrue([for pair in compact(split(" ", var.acme_dns_env)) : can(regex("^[A-Z][A-Z0-9_]*=.+$", pair))])
-    error_message = "acme_dns_env must be NAME=value pairs separated by spaces, such as HETZNER_API_TOKEN=abc."
-  }
-}
-
-variable "traefik_cloudflare_token_version" {
-  description = "Raise to write a changed traefik_cloudflare_token to Vault."
-  type        = number
-  default     = 1
-}
-
-variable "sso_google_client_secret" {
-  description = "Secret of the Google OAuth client of sso; kept in vault.yml of the project."
-  type        = string
-  sensitive   = true
-  ephemeral   = true
-  default     = ""
 }

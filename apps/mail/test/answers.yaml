@@ -1,3 +1,4 @@
 hostname: mail.example.org
 domains: [example.org, example.net]
 mailboxes: [info, sales]
+acme_email: admin@example.org

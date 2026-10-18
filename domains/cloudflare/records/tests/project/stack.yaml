@@ -1,0 +1,4 @@
+name: check
+apps:
+  cloudflare:
+    zones: [example.org]

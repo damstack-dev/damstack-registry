@@ -13,5 +13,5 @@ Before opening one:
 3. Nothing of a person or a project is in it: see the README. A value that
    must stay, such as a public resolver, goes in `.privacy-allow` with why.
 
-A new stack goes in `platforms/<name>` or `apps/<name>`, where `<name>` is the
+A new stack goes in `platforms/<name>`, `domains/<name>` or `apps/<name>`, where `<name>` is the
 `name` in its `damstack.yaml`.

@@ -4,14 +4,14 @@ stacks:
 - name: hashi
   url: https://github.com/damstack-dev/damstack-registry
   path: platforms/hashi
-  description: Consul, Vault and Nomad on one server, over WireGuard, with Traefik and backups, a platform for apps such as mail
+  description: Consul, Vault and Nomad on one server, their admin pages over WireGuard, with backups, a platform for apps such as mail
   provides:
   - nomad@1
   - vault-kv@1
   - consul@1
-  - ingress-traefik@1
-  - ingress-public@1
+  - ingress-internal@1
   - observability@1
+  recommended: true
 - name: grafana
   kind: app
   platform: hashi
@@ -19,7 +19,7 @@ stacks:
   path: apps/grafana
   description: Grafana for the platform, with the metrics and logs of the project as data sources
   requires:
-  - ingress-public@1
+  - ingress-internal@1
   uses:
   - metrics@1
   - logs@1
@@ -39,6 +39,7 @@ stacks:
   description: Mail for your domains, by Stalwart, with its DNS records, on a Nomad platform such as hashi
   requires:
   - ingress-public@1
+  - public-dns@1
 - name: mimir
   kind: app
   platform: hashi
@@ -63,6 +64,7 @@ stacks:
   description: Odoo with its PostgreSQL, on a Nomad platform such as hashi
   requires:
   - ingress-public@1
+  - public-dns@1
   - capability: postgres@16
     when: postgres.mode=external
 - name: postgres
@@ -81,3 +83,29 @@ stacks:
   description: A shared SeaweedFS object lake with an S3 API other apps read and write
   provides:
   - s3@1
+- name: traefik
+  kind: app
+  platform: hashi
+  url: https://github.com/damstack-dev/damstack-registry
+  path: apps/traefik
+  description: The public entry of the project, Traefik on ports 80 and 443 with certificates from Let's Encrypt, on a Nomad platform such as hashi
+  provides:
+  - ingress-public@1
+  - tls-certificates@1
+- name: cloudflare
+  kind: domain
+  platform: hashi
+  url: https://github.com/damstack-dev/damstack-registry
+  path: domains/cloudflare
+  description: Your domains on Cloudflare, damstack publishes the DNS records the apps need
+  provides:
+  - public-dns@1
+  recommended: true
+- name: manual
+  kind: domain
+  platform: hashi
+  url: https://github.com/damstack-dev/damstack-registry
+  path: domains/manual
+  description: Your domains anywhere, you add the DNS records the apps need by hand and damstack checks they are there
+  provides:
+  - public-dns@1

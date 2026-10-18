@@ -2,36 +2,6 @@ package terraform
 
 import data.rules
 
-infra_name(name) if name == data.infra_domain
-
-infra_name(name) if endswith(name, concat("", [".", data.infra_domain]))
-
-records contains [rc.address, rc.change.after] if {
-	some rc in input.resource_changes
-	rc.type == "cloudflare_dns_record"
-	rc.change.after != null
-	infra_name(rc.change.after.name)
-}
-
-deny contains msg if {
-	some [address, record] in records
-	record.proxied == true
-	msg := sprintf("%s: %s is an internal name and must not go through the Cloudflare proxy", [address, record.name])
-}
-
-deny contains msg if {
-	some [address, record] in records
-	record.type == "A"
-	not net.cidr_contains(data.network.cidr, record.content)
-	msg := sprintf("%s: %s must point into %s, not %s", [address, record.name, data.network.cidr, record.content])
-}
-
-deny contains msg if {
-	some [address, record] in records
-	record.type == "AAAA"
-	msg := sprintf("%s: %s is an internal name and has no IPv6 address inside WireGuard", [address, record.name])
-}
-
 deny contains msg if {
 	some rc in input.resource_changes
 	rc.type in rules.protected_types

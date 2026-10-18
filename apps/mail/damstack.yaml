@@ -3,10 +3,10 @@ name: mail
 kind: app
 description: Mail for your domains, by Stalwart, with its DNS records, on a Nomad platform such as hashi
 requires:
-  damstack: ">=0.20.0"
+  damstack: ">=0.21.0"
   toolbox: ">=1.1.0, <2.0.0"
   provides: [nomad, vault-kv]
-  capabilities: [ingress-public@1]
+  capabilities: [ingress-public@1, public-dns@1]
 
 questions:
   - name: hostname
@@ -21,6 +21,9 @@ questions:
     type: list
     default: [info]
     pattern: "^[a-z0-9][a-z0-9._-]*$"
+  - name: acme_email
+    prompt: Your email, for Let's Encrypt about the certificate of the mail server
+    pattern: "^[^@\\s]+@[^@\\s]+$"
 
 config: template/mail.yaml.tmpl
 done:

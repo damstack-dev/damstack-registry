@@ -1,0 +1,11 @@
+{
+  "example.org": [
+    {"type": "MX", "name": "example.org", "content": "mail.example.org", "priority": 10, "comment": null}
+  ],
+  "mail.example.org": [
+    {"type": "A", "name": "mail.example.org", "content": "192.0.2.10", "priority": null, "comment": "Mail server"}
+  ],
+  "example.net": [
+    {"type": "MX", "name": "example.net", "content": "mail.example.org", "priority": 10, "comment": null}
+  ]
+}

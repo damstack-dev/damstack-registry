@@ -1,0 +1,2 @@
+zones: [example.org]
+cloudflare_api_token: test-cloudflare-api-token

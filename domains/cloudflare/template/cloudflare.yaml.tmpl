@@ -1,0 +1,5 @@
+# The DNS records the apps leave in dns/ of the project go to Cloudflare: those of every
+# domain that is one of these zones or under one. Records of other names are not published;
+# damstack cloudflare output manual_records lists them, to add by hand where their DNS is.
+# The token is the secret cloudflare_api_token.
+zones: {{ yaml .zones }}

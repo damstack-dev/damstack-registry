@@ -11,14 +11,14 @@ damstack app add grafana -p <project>
 damstack deploy <project>
 ```
 
-It serves `grafana.<infra_domain>` on Traefik's internal entrypoint (WireGuard
-only), with the `mimir` and `loki` apps wired as data sources. Edit
+It serves `grafana.service.consul` on the platform's internal Traefik
+(WireGuard only, `ingress-internal@1`), with the `mimir` and `loki` apps wired as data sources. Edit
 `apps.grafana` with `damstack edit` if those apps use non-default ports
 (`mimir_port`, `loki_port`).
 
 After the deploy:
 
-- Grafana is at `https://grafana.<infra_domain>`, through WireGuard.
+- Grafana is at `https://grafana.service.consul`, through WireGuard.
 - The admin password: `damstack grafana output admin_password`.
 - `damstack grafana output admin_secret` gives the Vault name a consumer app
   reads to push its own dashboards and alerts with the grafana provider.
@@ -31,6 +31,14 @@ address, port and `path` the platform's Consul gives, the first metrics one the
 default. Without providers of one, its data source is as before: Mimir or Loki at
 `mimir_host`/`loki_host`, by default `mimir.service.consul:9009` and
 `loki.service.consul:3100`.
+
+## From grafana v0.3
+
+v0.4.0 goes with hashi v1.0.0: Grafana moves from `grafana.<infra_domain>` to
+`grafana.service.consul`, and no longer signs people in through the
+platform's single sign-on, which left hashi with v1.0.0; its Vault OIDC client
+is forgotten, not deleted (`removed`). Anonymous viewing is on by default, as
+it was without sign-on; `anonymous_viewer: false` turns it off.
 
 ## Development
 

@@ -2,9 +2,17 @@ package nomad
 
 import data.rules
 
-public_jobs contains "traefik"
+public_apps contains name if {
+	some name, app in data.apps
+	count(object.get(app, "public_ports", [])) > 0
+}
 
-public_jobs contains name if some name, _ in data.apps
+public_job(job_name) if job_name in public_apps
+
+public_job(job_name) if {
+	some app in public_apps
+	startswith(job_name, concat("", [app, "-"]))
+}
 
 groups contains [job_name, group_name, group] if {
 	some job_name, jobs in input.job
@@ -60,8 +68,8 @@ deny contains msg if {
 	some port_name, ports in network.port
 	some port in ports
 	port.host_network == rules.public_host_network
-	not job_name in public_jobs
-	msg := sprintf("%s/%s: port %s is on the public network; only %v may bind there, traefik and the apps in stack.yaml, everything else goes through Traefik", [job_name, group_name, port_name, sort(public_jobs)])
+	not public_job(job_name)
+	msg := sprintf("%s/%s: port %s is on the public network; only the jobs of apps in stack.yaml with public_ports may bind there, %v, everything else goes through the public entry", [job_name, group_name, port_name, sort(public_apps)])
 }
 
 pinned(image) if contains(image, "@sha256:")

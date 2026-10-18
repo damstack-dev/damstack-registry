@@ -1,0 +1,11 @@
+name: check
+server:
+  address: 192.0.2.10
+  bootstrap_user: root
+  ops_user: ops
+  public_interface: eth0
+  public_ports: []
+network:
+  cidr: 10.77.0.0/24
+  clients: [laptop]
+apps: {}

@@ -7,4 +7,6 @@ rules:
     - vault_kv_secret_v2
     - nomad_dynamic_host_volume
     - nomad_csi_volume
-  allow_destroy: []
+  # The DNS token of the Traefik of hashi before v1.0.0, which no longer asks one.
+  allow_destroy:
+    - module.stack.module.traefik.vault_kv_secret_v2.acme

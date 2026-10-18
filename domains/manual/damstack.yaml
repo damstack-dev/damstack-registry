@@ -1,0 +1,49 @@
+apiVersion: damstack/v2
+name: manual
+kind: domain
+description: Your domains anywhere, you add the DNS records the apps need by hand and damstack checks they are there
+requires:
+  damstack: ">=0.22.0"
+  toolbox: ">=1.1.0, <2.0.0"
+  provides: [nomad]
+provides: [public-dns@1]
+
+config: template/manual.yaml.tmpl
+done:
+  - "The records to add by hand, and which are in DNS yet: damstack manual records"
+
+targets:
+  nomad:
+    steps:
+      - name: records
+        title: DNS records to add by hand
+        takes: 10 s
+        run: &records
+          - sh
+          - -c
+          - >-
+            exec "$(dirname "$(command -v ansible)")/../python/bin/python3" -I
+            "$DAMSTACK_STACK/records.py" "$DAMSTACK_PROJECT" "$@"
+          - records
+        after_apps: true
+    commands:
+      records:
+        title: The DNS records to add by hand, looked up
+        run: *records
+
+check:
+  answers: test/answers.yaml
+  platform: test/platform.yaml
+  steps:
+    - name: records
+      run:
+        - sh
+        - -c
+        - >-
+          mkdir -p "$DAMSTACK_PROJECT/dns" &&
+          cp "$DAMSTACK_STACK/test/mail.json" "$DAMSTACK_PROJECT/dns/mail.json" &&
+          out=$("$(dirname "$(command -v ansible)")/../python/bin/python3" -I "$DAMSTACK_STACK/records.py" "$DAMSTACK_PROJECT" --print-only) &&
+          printf '%s\n' "$out" &&
+          printf '%s\n' "$out" | grep -q 'MX     example.org                              10 mail.example.org' &&
+          printf '%s\n' "$out" | grep -q 'A      mail.example.org                         192.0.2.10' &&
+          printf '%s\n' "$out" | grep -q '^example.net$'

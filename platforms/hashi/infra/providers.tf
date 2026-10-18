@@ -1,5 +1,3 @@
-provider "cloudflare" {}
-
 provider "consul" {}
 
 provider "nomad" {}

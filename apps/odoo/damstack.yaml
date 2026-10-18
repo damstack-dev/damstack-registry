@@ -3,11 +3,12 @@ name: odoo
 kind: app
 description: Odoo with its PostgreSQL, on a Nomad platform such as hashi
 requires:
-  damstack: ">=0.20.0"
+  damstack: ">=0.21.0"
   toolbox: ">=1.1.0, <2.0.0"
   provides: [nomad, vault-kv]
   capabilities:
     - ingress-public@1
+    - public-dns@1
     - {capability: postgres@16, when: postgres.mode=external}
 
 questions:

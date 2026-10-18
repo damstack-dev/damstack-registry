@@ -46,10 +46,9 @@
         that:
           - stack.server.address == '192.0.2.10'
           - stack.network.clients == ['laptop', 'phone']
-          - stack.dns.zones == ['infra.example.org', 'example.org']
-          - stack.infra_domain == 'infra.example.org'
-          - stack.acme_email == 'admin@example.org'
-          - stack.server.public_ports == [80, 443]
+          - stack.server.public_ports == []
+          - stack.infra_domain is not defined
+          - stack.dns is not defined
           - stack.apps == {}
         quiet: true
 
@@ -57,14 +56,16 @@
       ansible.builtin.assert:
         that:
           - firewall_allow | map(attribute='port') | select('defined') | list == [80, 443, 25, 993]
+          - firewall_allow | selectattr('port', 'defined') | selectattr('port', 'equalto', 80) | map(attribute='comment') | list == ['HTTP']
           - firewall_allow | selectattr('port', 'defined') | map(attribute='interface') | unique | list == ['eth0']
         quiet: true
       vars:
         stack:
           name: check
-          server: {address: 192.0.2.10, bootstrap_user: root, ops_user: ops, public_interface: eth0, public_ports: [80, 443]}
+          server: {address: 192.0.2.10, bootstrap_user: root, ops_user: ops, public_interface: eth0, public_ports: []}
           network: {cidr: 10.77.0.0/24, clients: [laptop]}
           apps:
+            traefik: {public_ports: [80, 443]}
             mail: {public_ports: [25, 443, 993]}
             web: {}
 

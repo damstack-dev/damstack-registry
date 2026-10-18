@@ -8,12 +8,12 @@ variables {
   vault_kv_path    = "secret"
 }
 
-run "it_serves_grafana_on_the_infra_domain" {
+run "it_serves_grafana_at_its_consul_name" {
   command = apply
 
   assert {
-    condition     = output.url == "https://grafana.infra.example.org"
-    error_message = "Grafana is not served on grafana.<infra_domain>."
+    condition     = output.url == "https://grafana.service.consul"
+    error_message = "Grafana is not served at grafana.service.consul."
   }
 
   assert {

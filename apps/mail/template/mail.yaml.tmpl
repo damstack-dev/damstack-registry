@@ -4,6 +4,8 @@ hostname: {{ yaml .hostname }}
 domains: {{ yaml .domains }}
 # Every domain gets these mailboxes; damstack mail output passwords prints their passwords.
 mailboxes: {{ yaml .mailboxes }}
+# Contact of the Let's Encrypt account of the mail server's certificate.
+acme_email: {{ yaml .acme_email }}
 # SMTP, submission with implicit TLS and with STARTTLS, and IMAP with implicit TLS.
 public_ports: [25, 465, 587, 993]
 allow_destroy: []
