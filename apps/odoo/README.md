@@ -45,8 +45,11 @@ After the deploy:
   platform's backup copies by name.
 - The secrets (database and master passwords) in Vault.
 - A Traefik route for the host name on the public HTTPS entrypoint, and a second
-  one for `/websocket`.
-- The `A` record of the host name, published by the platform.
+  one for `/websocket`, served by the public entry, `ingress-public@1`, such as
+  the [traefik](../traefik) app.
+- The `A` record of the host name, in `dns/odoo.json` of the project, published
+  by the project's domain, `public-dns@1`, such as
+  [cloudflare](../../domains/cloudflare) or [manual](../../domains/manual).
 
 Odoo opens no public port of its own; it faces the internet only through
 Traefik. So `apps.odoo.public_ports` is empty and the firewall gains no rule.

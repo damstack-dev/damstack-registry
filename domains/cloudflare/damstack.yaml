@@ -1,0 +1,59 @@
+apiVersion: damstack/v2
+name: cloudflare
+kind: domain
+description: Your domains on Cloudflare, damstack publishes the DNS records the apps need
+requires:
+  damstack: ">=0.22.0"
+  toolbox: ">=1.1.0, <2.0.0"
+  provides: [nomad]
+provides: [public-dns@1]
+
+questions:
+  - name: zones
+    prompt: Your domains on Cloudflare damstack may add records to, such as example.com
+    type: list
+    pattern: "^[a-z0-9-]+(\\.[a-z0-9-]+)+$"
+
+secrets:
+  - name: cloudflare_api_token
+    checks: [{cloudflare-token: zones}]
+    ask: Cloudflare token for the DNS records (Zone DNS Edit and Zone Read on those domains)
+    new_at: https://dash.cloudflare.com/profile/api-tokens
+
+config: template/cloudflare.yaml.tmpl
+done:
+  - "The DNS records of the apps are on Cloudflare, in {{ join \", \" .app.zones }}."
+  - "Records of names outside those zones, to add by hand: damstack cloudflare output manual_records"
+
+targets:
+  nomad:
+    steps:
+      - name: records
+        title: DNS records on Cloudflare
+        takes: 10 s
+        tofu:
+          dir: records
+          action: apply
+        env: &env
+          CLOUDFLARE_API_TOKEN: '{{ secret "cloudflare_api_token" }}'
+        after_apps: true
+        confirm: true
+    commands:
+      plan:
+        tofu: {dir: records, action: plan}
+        env: *env
+      output:
+        tofu: {dir: records, action: output}
+        env: *env
+
+check:
+  answers: test/answers.yaml
+  platform: test/platform.yaml
+  steps:
+    - name: records
+      run:
+        - sh
+        - -c
+        - >-
+          cd "$DAMSTACK_STACK/records" && export TF_DATA_DIR="$DAMSTACK_PROJECT/.damstack/work/tofu-test" TF_VAR_project="$DAMSTACK_PROJECT" &&
+          tofu init -backend=false -input=false -lockfile=readonly >/dev/null && tofu test -no-color

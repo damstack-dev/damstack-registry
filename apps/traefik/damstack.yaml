@@ -1,0 +1,51 @@
+apiVersion: damstack/v2
+name: traefik
+kind: app
+description: The public entry of the project, Traefik on ports 80 and 443 with certificates from Let's Encrypt, on a Nomad platform such as hashi
+requires:
+  damstack: ">=0.21.0"
+  toolbox: ">=1.1.0, <2.0.0"
+  provides: [nomad, consul]
+provides: [ingress-public@1, tls-certificates@1]
+
+questions:
+  - name: acme_email
+    prompt: Your email, for Let's Encrypt about the certificates
+    pattern: "^[^@\\s]+@[^@\\s]+$"
+
+config: template/traefik.yaml.tmpl
+done:
+  - "Public apps are served on ports 80 and 443 of {{ .config.server.address }}, each with its own certificate from Let's Encrypt once its DNS record points there."
+  - "If the server does not open 80 and 443 yet: damstack deploy {{ .config.name }} --all"
+
+targets:
+  nomad:
+    steps:
+      - name: apply
+        title: The public entry
+        takes: 1 min
+        tofu:
+          dir: infra
+          action: apply
+          policy: &policy {dir: policy}
+        tunnel: true
+        confirm: true
+    commands:
+      plan:
+        tofu: {dir: infra, action: plan, policy: *policy}
+        tunnel: true
+      output:
+        tofu: {dir: infra, action: output}
+
+check:
+  answers: test/answers.yaml
+  platform: test/platform.yaml
+  steps:
+    - name: outputs
+      run:
+        - sh
+        - -c
+        - >-
+          printf 'the CA of the platform, for the test only\n' > "$DAMSTACK_PROJECT/ca.pem" &&
+          cd "$DAMSTACK_STACK/infra" && export TF_DATA_DIR="$DAMSTACK_PROJECT/.damstack/work/tofu-test" TF_VAR_project="$DAMSTACK_PROJECT" &&
+          tofu init -backend=false -input=false -lockfile=readonly >/dev/null && tofu test -no-color

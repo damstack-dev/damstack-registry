@@ -1,10 +1,4 @@
 server_address: 192.0.2.10
 bootstrap_user: root
 ops_user: ops
-infra_domain: infra.example.org
-acme_email: admin@example.org
-dns_provider: cloudflare
-dns_zones: [infra.example.org, example.org]
 wireguard_clients: [laptop, phone]
-vault_cloudflare_api_token: test-cloudflare-api-token
-vault_cloudflare_traefik_token: test-cloudflare-traefik-token

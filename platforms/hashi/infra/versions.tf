@@ -4,10 +4,6 @@ terraform {
   backend "local" {}
 
   required_providers {
-    cloudflare = {
-      source  = "cloudflare/cloudflare"
-      version = "~> 5.0"
-    }
     consul = {
       source  = "hashicorp/consul"
       version = "~> 2.23"
@@ -15,10 +11,6 @@ terraform {
     nomad = {
       source  = "hashicorp/nomad"
       version = "~> 2.6"
-    }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.7"
     }
     tls = {
       source  = "hashicorp/tls"

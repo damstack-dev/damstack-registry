@@ -1,0 +1,9 @@
+# The public entry: Traefik on ports 80 and 443, serving the apps whose routers name the
+# entrypoint public-https, each with its own certificate from Let's Encrypt through HTTP-01.
+# The policies refuse a plan that would destroy its certificates; list the address under
+# allow_destroy to let it go.
+# Contact of the Let's Encrypt account.
+acme_email: {{ yaml .acme_email }}
+# HTTP, redirected to HTTPS, and HTTPS. The platform opens them on the server.
+public_ports: [80, 443]
+allow_destroy: []

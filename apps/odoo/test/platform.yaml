@@ -4,13 +4,8 @@ server:
   bootstrap_user: root
   ops_user: ops
   public_interface: eth0
-  public_ports: [80, 443]
+  public_ports: []
 network:
   cidr: 10.77.0.0/24
   clients: [laptop]
-infra_domain: infra.example.org
-acme_email: admin@example.org
-dns:
-  provider: cloudflare
-  zones: [example.org]
 apps: {}

@@ -1,11 +1,12 @@
 # damstack registry
 
-The platforms and apps [damstack](https://github.com/eugene-panin/damstack)
+The platforms, domains and apps [damstack](https://github.com/eugene-panin/damstack)
 deploys. Each stack is a directory with its `damstack.yaml`, and is released
 by a tag of its own.
 
 ```
 platforms/<name>/   a platform, such as hashi: Nomad, Consul and Vault on one server
+domains/<name>/     a domain on a platform: publishes the DNS records of the apps, such as cloudflare
 apps/<name>/        an app that runs on a platform, such as mail
 ```
 
@@ -14,7 +15,9 @@ or `mail/v0.4.1`; damstack takes the latest one of the stack a project uses.
 
 `index.yaml` lists the stacks for damstack. `scripts/index` writes it from
 their `damstack.yaml`, and CI fails when it is not up to date: run it after
-adding a stack or changing its description or capabilities.
+adding a stack or changing its description or capabilities. Where several
+stacks fit, damstack offers the ones `RECOMMENDED` in `scripts/index` names
+first: hashi among the platforms, cloudflare for `public-dns@1`.
 
 ## Capabilities
 
@@ -26,8 +29,11 @@ what one promises provides the next major. The ones in use:
 | `nomad@1` | a Nomad cluster the apps run their jobs on, `NOMAD_*` in their steps | hashi |
 | `vault-kv@1` | a Vault KV engine for the apps' secrets, `VAULT_*` in their steps | hashi |
 | `consul@1` | Consul and its DNS, `CONSUL_*` in the apps' steps | hashi |
-| `ingress-traefik@1` | Traefik, routing by the tags of Nomad services | hashi |
-| `ingress-public@1` | a public HTTP(S) entry with certificates, routing to Consul services by Traefik-format tags (`traefik.enable`, `traefik.http.routers.*`) | hashi |
+| `ingress-internal@1` | an HTTPS entry on the private network, `<service>.service.consul` with a certificate of the project's CA, routing to Consul services tagged with a router on the entrypoint `internal` | hashi |
+| `ingress-public@1` | a public HTTP(S) entry on ports 80 and 443, routing to Consul services by Traefik-format tags (`traefik.enable`, `traefik.http.routers.*`) on the entrypoint `public-https` | traefik |
+| `tls-certificates@1` | certificates from Let's Encrypt for public names, by HTTP-01: the resolver `http` of a router on `public-https` | traefik |
+| `public-dns@1` | the DNS records the apps leave in `dns/*.json` of the project, published after the apps' steps | cloudflare, manual |
+| `ingress-traefik@1` | Traefik, routing by the tags of Nomad services; hashi before v1.0.0 only | hashi < v1.0.0 |
 | `observability@1` | the platform's Alloy, collecting metrics and logs | hashi |
 | `logs@1` | a Loki push and query HTTP API | loki |
 | `metrics@1` | a Prometheus query API, under the service meta `path` | mimir |

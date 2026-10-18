@@ -13,6 +13,9 @@ import yaml
 
 ROOT = Path(subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True).stdout.strip())
 URL = "https://github.com/damstack-dev/damstack-registry"
+# Where several stacks fit, damstack offers these first: the platform of a new project,
+# and the provider of a capability. A manifest cannot say it of itself.
+RECOMMENDED = {"platforms/hashi", "domains/cloudflare"}
 HEAD = (
     "# The stacks of the registry, as damstack lists them. scripts/index writes it\n"
     "# from their damstack.yaml; CI fails when it is not up to date.\n"
@@ -30,7 +33,7 @@ def capability(s: str) -> str:
     return s if "@" in s else s + "@1"
 
 
-def capabilities(m: dict) -> dict:
+def capabilities(path: str, m: dict) -> dict:
     out = {}
     for key, value in (
         ("provides", m.get("provides")),
@@ -39,28 +42,30 @@ def capabilities(m: dict) -> dict:
     ):
         if value:
             out[key] = value
-    if m.get("recommended"):
+    if path in RECOMMENDED:
         out["recommended"] = True
     return out
 
 
 def index() -> str:
     platforms = manifests("platforms")
-    apps = manifests("apps")
+    apps = manifests("apps") + manifests("domains")
     stacks = []
     for path, m in platforms:
         entry = {"name": m["name"], "url": URL, "path": path, "description": m.get("description", "")}
-        entry.update(capabilities(m))
+        entry.update(capabilities(path, m))
         stacks.append(entry)
     for path, m in apps:
         needs = {capability(c) for c in m.get("requires", {}).get("provides", [])}
         hosts = [p["name"] for _, p in platforms if needs <= {capability(c) for c in p.get("provides", [])}]
-        entry = {"name": m["name"], "kind": "app"}
+        entry = {"name": m["name"], "kind": m.get("kind", "app")}
         if len(hosts) == 1:
             entry["platform"] = hosts[0]
         entry.update({"url": URL, "path": path, "description": m.get("description", "")})
-        entry.update(capabilities(m))
+        entry.update(capabilities(path, m))
         stacks.append(entry)
+    for path in sorted(RECOMMENDED - {p for p, _ in platforms + apps}):
+        sys.exit(f"{path}: recommended, but there is no such stack")
     for path, m in platforms + apps:
         if m["name"] != Path(path).name:
             sys.exit(f"{path}: the directory is not named as the stack, {m['name']}")

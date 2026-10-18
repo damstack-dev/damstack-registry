@@ -65,7 +65,22 @@ test_public_port_denied if {
 
 test_public_port_allowed_for_an_app if {
 	count(nomad.deny) == 0 with input as job("shop", good_task, [{"port": {"https": [{"static": 443, "host_network": "public"}]}}])
-		with data.apps as {"shop": {}}
+		with data.apps as {"shop": {"public_ports": [443]}}
+}
+
+test_public_port_allowed_for_a_job_of_the_app if {
+	count(nomad.deny) == 0 with input as job("traefik-public", good_task, [{"port": {"https": [{"static": 443, "host_network": "public"}]}}])
+		with data.apps as {"traefik": {"public_ports": [80, 443]}}
+}
+
+test_public_port_denied_for_an_app_without_public_ports if {
+	count(nomad.deny) == 1 with input as job("shop", good_task, [{"port": {"https": [{"static": 443, "host_network": "public"}]}}])
+		with data.apps as {"shop": {"public_ports": []}}
+}
+
+test_public_port_denied_for_a_lookalike_name if {
+	count(nomad.deny) == 1 with input as job("traefikx", good_task, [{"port": {"https": [{"static": 443, "host_network": "public"}]}}])
+		with data.apps as {"traefik": {"public_ports": [443]}}
 }
 
 test_public_port_denied_once_the_app_is_gone if {
@@ -73,6 +88,12 @@ test_public_port_denied_once_the_app_is_gone if {
 		with data.apps as {}
 }
 
-test_public_port_allowed_for_traefik if {
-	count(nomad.deny) == 0 with input as job("traefik", good_task, [{"port": {"https": [{"static": 443, "host_network": "public"}]}}])
+test_public_port_denied_for_traefik_without_the_app if {
+	count(nomad.deny) == 1 with input as job("traefik", good_task, [{"port": {"https": [{"static": 443, "host_network": "public"}]}}])
+		with data.apps as {}
+}
+
+test_internal_traefik_allowed if {
+	count(nomad.deny) == 0 with input as job("traefik", good_task, [{"port": {"internal": [{"static": 443}]}}])
+		with data.apps as {}
 }

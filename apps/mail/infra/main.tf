@@ -9,6 +9,6 @@ module "mail" {
   hostname      = local.mail.hostname
   domains       = local.mail.domains
   mailboxes     = try(local.mail.mailboxes, ["info"])
-  acme_email    = try(local.mail.acme_email, local.stack.acme_email)
+  acme_email    = local.mail.acme_email
   vault_kv_path = var.vault_kv_path
 }

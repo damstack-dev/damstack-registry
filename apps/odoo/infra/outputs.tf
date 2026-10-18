@@ -1,5 +1,5 @@
 output "dns_records" {
-  description = "DNS record of the Odoo host name; the platform publishes it."
+  description = "DNS record of the Odoo host name; a domain module of the project publishes it."
   value = {
     (local.odoo.hostname) = [
       { type = "A", name = local.odoo.hostname, content = var.server_address, priority = null, comment = "Odoo" },

@@ -3,16 +3,16 @@ name: grafana
 kind: app
 description: Grafana for the platform, with the metrics and logs of the project as data sources
 requires:
-  damstack: ">=0.20.0"
+  damstack: ">=0.21.0"
   toolbox: ">=1.1.0, <2.0.0"
   provides: [nomad, vault-kv]
-  capabilities: [ingress-public@1]
+  capabilities: [ingress-internal@1]
 
 uses: [metrics@1, logs@1]
 
 config: template/grafana.yaml.tmpl
 done:
-  - "Grafana is at https://grafana.{{ .config.infra_domain }}, through WireGuard."
+  - "Grafana is at https://grafana.service.consul, through WireGuard."
   - "The admin password: damstack grafana output admin_password"
   - "A consumer app pushes its own dashboards and alerts to it with the grafana provider."
 
