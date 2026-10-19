@@ -3,7 +3,7 @@ name: traefik
 kind: app
 description: The public entry of the project, Traefik on ports 80 and 443 with certificates from Let's Encrypt, on a Nomad platform such as hashi
 requires:
-  damstack: ">=0.21.0"
+  damstack: ">=0.23.0"
   toolbox: ">=1.1.0, <2.0.0"
   provides: [nomad, consul]
 provides: [ingress-public@1, tls-certificates@1]
@@ -16,7 +16,6 @@ questions:
 config: template/traefik.yaml.tmpl
 done:
   - "Public apps are served on ports 80 and 443 of {{ .config.server.address }}, each with its own certificate from Let's Encrypt once its DNS record points there."
-  - "If the server does not open 80 and 443 yet: damstack deploy {{ .config.name }} --all"
 
 targets:
   nomad:
