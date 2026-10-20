@@ -1,0 +1,56 @@
+apiVersion: damstack/v2
+name: webmail
+kind: app
+description: Webmail for every domain of the mail app, by Bulwark, over JMAP
+requires:
+  damstack: ">=0.21.0"
+  toolbox: ">=1.1.0, <2.0.0"
+  provides: [nomad, vault-kv]
+  capabilities: [ingress-public@1, public-dns@1]
+
+questions:
+  - name: hostnames
+    prompt: The names the webmail is served on, such as webmail.example.com
+    type: list
+    pattern: "^[a-z0-9-]+(\\.[a-z0-9-]+)+$"
+
+config: template/webmail.yaml.tmpl
+done:
+  - "{{ range .app.hostnames }}https://{{ . }} {{ end }}— sign in with the full address and the password of the mailbox."
+  - "The certificates come in a few minutes, once DNS has spread."
+
+targets:
+  nomad:
+    steps:
+      - name: apply
+        title: Webmail
+        takes: 1 min
+        tofu:
+          dir: infra
+          action: apply
+          policy: &policy {dir: policy}
+          outputs: {dns_records: dns/webmail.json}
+        env: &env
+          TF_VAR_server_address: "{{ .config.server.address }}"
+        tunnel: true
+        confirm: true
+    commands:
+      plan:
+        tofu: {dir: infra, action: plan, policy: *policy}
+        env: *env
+        tunnel: true
+      output:
+        tofu: {dir: infra, action: output}
+        env: *env
+
+check:
+  answers: test/answers.yaml
+  platform: test/platform.yaml
+  steps:
+    - name: outputs
+      run:
+        - sh
+        - -c
+        - >-
+          cd "$DAMSTACK_STACK/infra" && export TF_DATA_DIR="$DAMSTACK_PROJECT/.damstack/work/tofu-test" TF_VAR_project="$DAMSTACK_PROJECT" &&
+          tofu init -backend=false -input=false -lockfile=readonly >/dev/null && tofu test -no-color
