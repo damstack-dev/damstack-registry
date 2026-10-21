@@ -92,6 +92,15 @@ stacks:
   provides:
   - ingress-public@1
   - tls-certificates@1
+- name: webmail
+  kind: app
+  platform: hashi
+  url: https://github.com/damstack-dev/damstack-registry
+  path: apps/webmail
+  description: Webmail for every domain of the mail app, by Bulwark, over JMAP
+  requires:
+  - ingress-public@1
+  - public-dns@1
 - name: cloudflare
   kind: domain
   platform: hashi

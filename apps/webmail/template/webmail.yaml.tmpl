@@ -1,0 +1,10 @@
+# Webmail for every mailbox of the mail app, by Bulwark. People sign in with
+# their full address; one webmail serves all the mail domains.
+hostnames: {{ yaml .hostnames }}
+# The JMAP server; empty takes https://<apps.mail.hostname>. Stalwart must allow
+# the browser to call it from the webmail's names: apps.mail.permissive_cors.
+jmap_url: ""
+app_name: Webmail
+stalwart_features: true
+public_ports: []
+allow_destroy: []
